@@ -4,9 +4,12 @@ import bluesky.plan_stubs as bps
 import bluesky.plans as bsp
 import numpy as np
 from bluesky.preprocessors import subs_decorator
-from bluesky.protocols import Readable, Movable
-from i18_bluesky.plans.curve_fitting import FitCurves, FitCurvesMaxValue, fit_quadratic_curve
-
+from bluesky.protocols import Movable, Readable
+from i18_bluesky.plans.curve_fitting import (
+    FitCurves,
+    FitCurvesMaxValue,
+    fit_quadratic_curve,
+)
 from i18_bluesky.plans.lookup_tables import save_fit_results
 
 
@@ -77,7 +80,7 @@ def undulator_lookuptable_scan(bragg_start: float, bragg_step: float, n_steps: i
     fit_results = {}
 
     for bragg_angle in bragg_points:
-        print("Bragg angle : {}".format(bragg_angle))
+        print(f"Bragg angle : {bragg_angle}")
         yield from bps.mov(bragg_device, bragg_angle)
 
         # Make new set of undulator gap values to be scanned...
@@ -95,18 +98,18 @@ def undulator_lookuptable_scan(bragg_start: float, bragg_step: float, n_steps: i
                 gaps = list(fit_results.values())[-2:]
                 grad = (gaps[1] - gaps[0]) / (angles[1] - angles[0])
                 expected_peak = (bragg_angle - angles[-1]) * grad + gaps[-1]
-                print("angles = {}, gaps = {}, expected peak gap value = {}".format(angles, gaps, expected_peak))
+                print(f"angles = {angles}, gaps = {gaps}, expected peak gap value = {expected_peak}")
                 start_gap = expected_peak - gap_range*0.5
-                print("start gap value = {}".format(start_gap))
+                print(f"start gap value = {start_gap}")
         else:
             # gap start is current position of undulator gap
             msg = yield from bps.read(undulator_gap_device)
             start_gap = msg[undulator_gap_device.name]['value']
-            print("Current undulator gap position : {}".format(start_gap))
+            print(f"Current undulator gap position : {start_gap}")
 
         gap_points = undulator_points + start_gap + gap_offset
 
-        print("Undulator values : {}".format(gap_points))
+        print(f"Undulator values : {gap_points}")
 
         if curve_fit_callback is None:
             curve_fit_callback = fit_curve_callback_maxval
@@ -118,14 +121,14 @@ def undulator_lookuptable_scan(bragg_start: float, bragg_step: float, n_steps: i
 
         msg = yield from processing_decorated_plan()
 
-        print("Fit results : {}".format(curve_fit_callback.results))
+        print(f"Fit results : {curve_fit_callback.results}")
 
         # save the peak x position from the curve fit result
         # (fitted x values are relative to first point, so add the start gap position)
         fit_results[bragg_angle] = curve_fit_callback.results[0][0][-1] + gap_points[0]
         last_peak_position = fit_results[bragg_angle]
 
-        print("Fitted peak position : bragg = {}, undulator gap = {}".format(bragg_angle, last_peak_position))
+        print(f"Fitted peak position : bragg = {bragg_angle}, undulator gap = {last_peak_position}")
         bragg_angle += bragg_step
 
     fit_params, cov = fit_quadratic_curve(fit_results, **kwargs)

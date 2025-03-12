@@ -1,9 +1,9 @@
-from inspect import signature
 
-from scipy.optimize import curve_fit
-from bluesky.callbacks.core import CollectThenCompute
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from bluesky.callbacks.core import CollectThenCompute
+from scipy.optimize import curve_fit
+
 
 class FitCurves(CollectThenCompute):
     """
@@ -39,7 +39,7 @@ class FitCurves(CollectThenCompute):
             bounds = self.bounds
         if self.bounds_provider is not None:
             bounds = self.bounds_provider(xvals, yvals)
-            print("Bounds from {} : {}".format(self.bounds_provider.__name__, bounds))
+            print(f"Bounds from {self.bounds_provider.__name__} : {bounds}")
 
         if bounds is None:
             return curve_fit(self.fit_function, xvals, yvals)
@@ -139,14 +139,14 @@ def fit_quadratic_curve(data_results, show_plot=False, bounds=None, default_boun
 
     bounds = ( tuple(lower_bound), tuple(upper_bound))
     param, cov = curve_fit(trial_quadratic, x_vals, y_vals, bounds=bounds)
-    print("Fit params (quadratic) : {}".format(param))
+    print(f"Fit params (quadratic) : {param}")
 
     # change quadratic component of bounds to force linear fit
     lower_bound[-1]=-1e-12
     upper_bound[-1]=1e-12
     bounds_linear_fit=( tuple(lower_bound), tuple(upper_bound))
     params_linear, cov = curve_fit(trial_quadratic, x_vals, y_vals, bounds=bounds_linear_fit)
-    print("Fit params (linear) : {}".format(params_linear))
+    print(f"Fit params (linear) : {params_linear}")
 
     if (show_plot) :
         # Make arrays with x-y coords of fitted function profile

@@ -1,7 +1,8 @@
+import json
+
+import numpy as np
 import pandas as pd
 from i18_bluesky.plans.curve_fitting import fit_quadratic_curve, quadratic
-import numpy as np
-import json
 
 """
 Names of the columns in the ID gap lookup table files
@@ -18,7 +19,7 @@ def load_ascii_lookuptable(filename, lines_to_skip=2):
     :return: dictionary containing the value on each line { x1:y1, x2:y2 ...}
 
     """
-    print("Loading ascii lookup table from {}".format(filename))
+    print(f"Loading ascii lookup table from {filename}")
     dataframe = pd.read_csv(filename, sep=" ", skiprows=lines_to_skip, names=id_gap_lookup_table_column_names)
     dataframe.info()
     return {v[0]:v[1] for v in dataframe.values}
@@ -99,11 +100,11 @@ def save_fit_results(filename, bragg_angles, gap_values, fit_params=None) :
     dataframe = pd.DataFrame({"# "+id_gap_lookup_table_column_names[0]: bragg_angles,
                               id_gap_lookup_table_column_names[1]: gap_values})
 
-    print("Saving fit parameters and bragg angle undulator values to {}".format(filename))
+    print(f"Saving fit parameters and bragg angle undulator values to {filename}")
     with open(filename, "w") as f :
         if fit_params is not None :
             json_string=json.dumps(fit_params.tolist())
-            f.write("# Quadratic fit parameters (x = Bragg, gap = a + b*x + c*x*x)\n# {}\n".format(json_string))
+            f.write(f"# Quadratic fit parameters (x = Bragg, gap = a + b*x + c*x*x)\n# {json_string}\n")
         dataframe.to_csv(f, **lookup_table_kwargs)
 
     return dataframe
@@ -114,9 +115,9 @@ def load_fit_results(filename) :
     :param filename:
     :return: tuple containing : pandas dataframe of the bragg angle, undulator values, and the fit_parameters (if present in the file)
     """
-    dataframe = pd.read_csv(filename, comment="#", sep="\s+",  header=None, names=id_gap_lookup_table_column_names)
+    dataframe = pd.read_csv(filename, comment="#", sep=r"\s+",  header=None, names=id_gap_lookup_table_column_names)
     fit_params = None
-    with open(filename, "r") as f :
+    with open(filename) as f :
         if "Quadratic" in f.readline() :
             fit_params_string = f.readline().replace("#", "")
             fit_params = json.loads(fit_params_string)

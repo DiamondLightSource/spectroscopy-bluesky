@@ -1,5 +1,6 @@
 import numexpr as ne
 
+
 class ExpressionEvaluator :
     def __init__(self):
         self.expression = None
@@ -14,7 +15,7 @@ def load_dcm_perp(filename) :
     line_with_expr="ExpressionStoT"
     replacements = {"<"+line_with_expr+">":"", "</"+line_with_expr+">":"", "atan":"arctan"}
 
-    with open(filename, "r") as file :
+    with open(filename) as file :
         for line in file.readlines():
             if line_with_expr in line:
                 func_string = line

@@ -1,23 +1,19 @@
-import os
-
-
 # os.environ['EPICS_CA_SERVER_PORT'] = "6064"  # set the Epics port before other imports, otherwise wrong value is picked up (5054)
-
 import asyncio
+import os
 import time
+
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
-from bluesky.plans import scan
-from ophyd import EpicsMotor, EpicsSignalRO
-from ophyd.sim import SynGauss, SynAxis
-from ophyd_async.epics.motor import Motor
-from databroker import Header
-from databroker import Broker
-from dataclasses import dataclass
-from i18_bluesky.plans.lookup_tables import fit_lookuptable_curve, generate_new_ascii_lookuptable
+from databroker import Broker, Header
+from i18_bluesky.plans.lookup_tables import (
+    fit_lookuptable_curve,
+    generate_new_ascii_lookuptable,
+)
 from i18_bluesky.plans.undulator_lookuptable_plan import undulator_lookuptable_scan
-
-import sys
+from ophyd import EpicsMotor, EpicsSignalRO
+from ophyd.sim import SynAxis, SynGauss
+from ophyd_async.epics.motor import Motor
 
 
 def save_scan_data_ascii_file(header: Header, file_path, file_name_format="scan_%d.txt", float_format="%.4f", include_index=True):
@@ -28,7 +24,7 @@ def save_scan_data_ascii_file(header: Header, file_path, file_name_format="scan_
     scan_id = header.start.scan_id
     columns = (*header.start.motors, *header.start.detectors)
     full_name = file_path + "/" + file_name_format % (scan_id)
-    print("Saving data to {}\nColumns : {}".format(full_name, columns))
+    print(f"Saving data to {full_name}\nColumns : {columns}")
     header.table().to_csv(full_name, sep="\t", columns=columns, float_format=float_format, index=include_index)
 
 class EpicsSignalROWithWait(EpicsSignalRO):
@@ -121,6 +117,7 @@ else:
 # bragg_num_steps = 20
 
 import math
+
 si_d_spacing = 5.4310205
 def bragg_to_energy(bragg_angle) :
     si_d_spacing*2*math.sin(bragg_angle*math.pi/180.0)

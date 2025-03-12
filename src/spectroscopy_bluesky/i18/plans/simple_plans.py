@@ -1,4 +1,5 @@
-from typing import Any, List, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 import bluesky.plans as bp
 from dls_bluesky_core.core import MsgGenerator
@@ -20,10 +21,10 @@ def make_args(motor, scan_args, prefix=""):
 
 
 def step_scan(
-    detectors: List[StandardDetector],
+    detectors: list[StandardDetector],
     motor: Motor,
-    scan_args: List[object],
-    metadata: Optional[Mapping[str, Any]] = None,
+    scan_args: list[object],
+    metadata: Mapping[str, Any] | None = None,
 ) -> MsgGenerator:
     """
     Scan wrapping `bp.scan`
@@ -50,13 +51,13 @@ def step_scan(
 
 
 def grid_scan(
-    detectors: List[StandardDetector],
+    detectors: list[StandardDetector],
     motor1: Motor,
-    scan_args1: List[object],
+    scan_args1: list[object],
     motor2: Motor,
-    scan_args2: List[object],
-    metadata: Optional[Mapping[str, Any]] = None,
-    snake_axes: Optional[bool] = None,
+    scan_args2: list[object],
+    metadata: Mapping[str, Any] | None = None,
+    snake_axes: bool | None = None,
 ) -> MsgGenerator:
     """
     Scan wrapping `bp.grid_scan'

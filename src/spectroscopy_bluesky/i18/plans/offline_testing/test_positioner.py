@@ -3,13 +3,9 @@ from enum import Enum
 
 os.environ['EPICS_CA_SERVER_PORT'] = "6064"
 
-from ophyd.pv_positioner import PVPositioner
-from ophyd import EpicsSignalRO, EpicsSignal, EpicsMotor
 from ophyd import Component as Cpt
-
-from bluesky import RunEngine
-from bluesky.callbacks.best_effort import BestEffortCallback
-from bluesky.plans import scan
+from ophyd import EpicsSignal, EpicsSignalRO
+from ophyd.pv_positioner import PVPositioner
 
 
 class EpicsMotorPositioner(PVPositioner):

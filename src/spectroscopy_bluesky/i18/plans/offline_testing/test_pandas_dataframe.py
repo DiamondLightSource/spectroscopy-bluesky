@@ -1,6 +1,4 @@
-import pandas as pd
-import numpy as np
-from i18_bluesky.plans.lookup_tables import load_ascii_lookuptable, id_gap_lookup_table_column_names, load_fit_results
+from i18_bluesky.plans.lookup_tables import load_fit_results
 
 filename = "lookuptable_harmonic1.txt"
 #beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"
