@@ -5,16 +5,13 @@ import bluesky.plans as bsp
 import numpy as np
 from bluesky.preprocessors import subs_decorator
 from bluesky.protocols import Movable, Readable
-from i18_bluesky.plans.curve_fitting import (
-    FitCurves,
-    FitCurvesMaxValue,
-    fit_quadratic_curve,
-)
-from i18_bluesky.plans.lookup_tables import save_fit_results
+
+from spectroscopy_bluesky.i18.plans.curve_fitting import FitCurves, FitCurvesMaxValue
+from spectroscopy_bluesky.i18.plans.lookup_tables import save_fit_results
 
 
 def trial_gaussian(x, a, b, c):
-    return a * np.exp(-((x - c) * b) ** 2)
+    return a * np.exp(-(((x - c) * b) ** 2))
 
 
 def bounds_provider(xvals, yvals):
@@ -28,7 +25,11 @@ def bounds_provider(xvals, yvals):
     centre_range = c_range * 0.1
     bounds_c = weighted_centre - centre_range, weighted_centre + centre_range
 
-    return (bounds_a[0], bounds_b[0], bounds_c[0]), (bounds_a[1], bounds_b[1], bounds_c[1])
+    return (bounds_a[0], bounds_b[0], bounds_c[0]), (
+        bounds_a[1],
+        bounds_b[1],
+        bounds_c[1],
+    )
 
 
 def normalise_xvals(xvals, yvals):
@@ -47,24 +48,32 @@ def max_value_bounds(xvals, yvals):
 fit_curve_callback = FitCurves()
 fit_curve_callback.fit_function = trial_gaussian
 fit_curve_callback.set_transform_function(
-    normalise_xvals)  # set transform function to make x values relative before fitting
+    normalise_xvals
+)  # set transform function to make x values relative before fitting
 fit_curve_callback.set_bounds_provider(bounds_provider)
 
 fit_curve_callback_maxval = FitCurvesMaxValue()
 fit_curve_callback_maxval.set_transform_function(normalise_xvals)
 
 
-def undulator_lookuptable_scan(bragg_start: float, bragg_step: float, n_steps: int,
-                               initial_gap_start: float, gap_range: float, gap_step: float,
-                               bragg_device: Movable,
-                               undulator_gap_device: Movable,
-                               detector: Readable,
-                               use_last_peak=False,
-                               gap_offset: float = 0,
-                               fit_parameters: list[float] = None,
-                               output_file: str = None,
-                               curve_fit_callback=None,
-                               *args, **kwargs):
+def undulator_lookuptable_scan(
+    bragg_start: float,
+    bragg_step: float,
+    n_steps: int,
+    initial_gap_start: float,
+    gap_range: float,
+    gap_step: float,
+    bragg_device: Movable,
+    undulator_gap_device: Movable,
+    detector: Readable,
+    use_last_peak=False,
+    gap_offset: float = 0,
+    fit_parameters: list[float] = None,
+    output_file: str = None,
+    curve_fit_callback=None,
+    *args,
+    **kwargs,
+):
     # Generate undulator gap values to be used for each inner scan
     # (values are relative to the start position)
     undulator_points = np.linspace(0, gap_range, math.floor(gap_range / gap_step))
@@ -98,13 +107,15 @@ def undulator_lookuptable_scan(bragg_start: float, bragg_step: float, n_steps: i
                 gaps = list(fit_results.values())[-2:]
                 grad = (gaps[1] - gaps[0]) / (angles[1] - angles[0])
                 expected_peak = (bragg_angle - angles[-1]) * grad + gaps[-1]
-                print(f"angles = {angles}, gaps = {gaps}, expected peak gap value = {expected_peak}")
-                start_gap = expected_peak - gap_range*0.5
+                print(
+                    f"angles = {angles}, gaps = {gaps}, expected peak gap value = {expected_peak}"
+                )
+                start_gap = expected_peak - gap_range * 0.5
                 print(f"start gap value = {start_gap}")
         else:
             # gap start is current position of undulator gap
             msg = yield from bps.read(undulator_gap_device)
-            start_gap = msg[undulator_gap_device.name]['value']
+            start_gap = msg[undulator_gap_device.name]["value"]
             print(f"Current undulator gap position : {start_gap}")
 
         gap_points = undulator_points + start_gap + gap_offset
@@ -128,7 +139,9 @@ def undulator_lookuptable_scan(bragg_start: float, bragg_step: float, n_steps: i
         fit_results[bragg_angle] = curve_fit_callback.results[0][0][-1] + gap_points[0]
         last_peak_position = fit_results[bragg_angle]
 
-        print(f"Fitted peak position : bragg = {bragg_angle}, undulator gap = {last_peak_position}")
+        print(
+            f"Fitted peak position : bragg = {bragg_angle}, undulator gap = {last_peak_position}"
+        )
         bragg_angle += bragg_step
 
     fit_params, cov = fit_quadratic_curve(fit_results, **kwargs)
@@ -141,6 +154,8 @@ def undulator_lookuptable_scan(bragg_start: float, bragg_step: float, n_steps: i
     if output_file is not None:
         best_gap_values = list(fit_results.values())
         bragg_angles = list(fit_results.keys())
-        save_fit_results(output_file, fit_results.keys(), fit_results.values(), fit_params)
+        save_fit_results(
+            output_file, fit_results.keys(), fit_results.values(), fit_params
+        )
 
     return fit_params

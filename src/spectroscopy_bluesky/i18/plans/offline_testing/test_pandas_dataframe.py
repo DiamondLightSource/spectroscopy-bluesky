@@ -1,13 +1,12 @@
-from i18_bluesky.plans.lookup_tables import load_fit_results
+from spectroscopy_bluesky.i18.plans.lookup_tables import load_fit_results
 
 filename = "lookuptable_harmonic1.txt"
-#beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"
-#filename = beamline_lookuptable_dir + "Si111/lookuptable_harmonic9.txt"
-filename="/tmp/fits.txt"
+# beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"  # noqa: E501
+# filename = beamline_lookuptable_dir + "Si111/lookuptable_harmonic9.txt"
+filename = "/tmp/fits.txt"
 dataframe = load_fit_results(filename)
 
 print(dataframe)
-
 
 
 """

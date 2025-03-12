@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import bluesky.plans as bp
-from dls_bluesky_core.core import MsgGenerator
+from dodal.common.types import MsgGenerator
 from ophyd_async.core.detector import StandardDetector
 from ophyd_async.epics.motion import Motor
 

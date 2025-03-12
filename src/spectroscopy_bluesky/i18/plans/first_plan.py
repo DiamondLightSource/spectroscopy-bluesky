@@ -1,4 +1,4 @@
-from dls_bluesky_core.core import MsgGenerator
+from dodal.common.types import MsgGenerator
 
 # sample stages T1X
 # T1Y
