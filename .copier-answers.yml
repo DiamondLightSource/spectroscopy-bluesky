@@ -1,0 +1,18 @@
+# Changes here will be overwritten by Copier
+_commit: 2.6.0
+_src_path: gh:DiamondLightSource/python-copier-template
+author_email: stanislaw.malinowski@diamond.ac.uk
+author_name: Stanislaw Malinowski
+component_lifecycle: experimental
+component_owner: group:default/daq
+component_type: library
+description: Plans to use at spectroscopy beamlines at DLS
+distribution_name: spectroscopy-bluesky
+docker: true
+docs_type: README
+git_platform: github.com
+github_org: DiamondLightSource
+package_name: spectroscopy_bluesky
+pypi: true
+repo_name: spectroscopy-bluesky
+type_checker: pyright

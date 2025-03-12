@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: spectroscopy-bluesky
+  title: spectroscopy-bluesky
+  description: Plans to use at spectroscopy beamlines at DLS
+spec:
+  type: library
+  lifecycle: experimental
+  owner: group:default/daq
