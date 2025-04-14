@@ -3,6 +3,7 @@ from dodal.common import inject
 from dodal.common.types import MsgGenerator
 from dodal.devices import DCM
 from dodal.devices.i18.diode import Diode
+import event_model
 
 DEFAULT_DCM: DCM = inject("dcm")
 DEFAULT_DIODE: Diode = inject("d7diode")
@@ -67,6 +68,9 @@ def align_dcm(
         # use patterngenerator
         # make the undulator gap motor to be something virutal
         pass
+        d = event_model.ComposeDescriptor()
+        e = event_model.ComposeEvent()
+
     else:
         yield from bps.read(diode)
         # use bragg motor
