@@ -51,7 +51,7 @@ class FitCurves(CollectThenCompute):
 
     def determine_scan_shape(self):
         # Extract information about scan shape from start document :
-        return self._start_doc.get("shape") or [self._start_doc["num_points"]]
+        return self._start_doc.get("shape") or [self._start_doc["num_points"]]  # type: ignore
 
     def extract_data(self):
         """Extract the x and y values (i.e. position of motor being moved and detector readout)

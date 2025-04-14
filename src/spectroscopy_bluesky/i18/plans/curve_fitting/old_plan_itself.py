@@ -60,8 +60,8 @@ def undulator_lookuptable_scan(
     detector: Readable,
     use_last_peak=False,
     gap_offset: float = 0,
-    fit_parameters: list[float] = None,
-    output_file: str = None,
+    fit_parameters: list[float] | None = None,
+    output_file: str | None = None,
     curve_fit_callback=None,
     *args,
     **kwargs,
@@ -96,7 +96,7 @@ def undulator_lookuptable_scan(
                 grad = (gaps[1] - gaps[0]) / (angles[1] - angles[0])
                 expected_peak = (bragg_angle - angles[-1]) * grad + gaps[-1]
                 print(
-                    f"angles = {angles}, gaps = {gaps}, expected peak gap value = {expected_peak}"
+                    f"angles = {angles}, gaps = {gaps}, expected peak gap value = {expected_peak}"  # noqa: E501
                 )
                 start_gap = expected_peak - gap_range * 0.5
                 print(f"start gap value = {start_gap}")
@@ -140,8 +140,6 @@ def undulator_lookuptable_scan(
 
     # save the fitted peak positions to Ascii file
     if output_file is not None:
-        best_gap_values = list(fit_results.values())
-        bragg_angles = list(fit_results.keys())
         save_fit_results(
             output_file, fit_results.keys(), fit_results.values(), fit_params
         )

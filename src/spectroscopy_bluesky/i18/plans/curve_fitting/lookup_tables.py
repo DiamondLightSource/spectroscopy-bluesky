@@ -4,7 +4,10 @@ import math
 import numpy as np
 import pandas as pd
 
-from spectroscopy_bluesky.i18.plans.curve_fitting import fit_quadratic_curve, quadratic
+from spectroscopy_bluesky.i18.plans.curve_fitting.curve_fitting import (
+    fit_quadratic_curve,
+)
+from spectroscopy_bluesky.i18.plans.curve_fitting.stats import quadratic
 
 """
 Names of the columns in the ID gap lookup table files
@@ -96,7 +99,8 @@ def fit_lookuptable_curve(filename, **kwargs):
 def save_fit_results(filename, bragg_angles, gap_values, fit_params=None):
     """
         Save results from running
-        :py:func:`spectroscopy_bluesky.i18.plans.undulator_lookuptable_scan` plan to Ascii file
+        :py:func:`spectroscopy_bluesky.i18.plans.undulator_lookuptable_scan`
+         plan to Ascii file
         The top of the file contains :
         <li> Two lines of header showing fit parameters (if fit_params is set)
         <li> One header line showing the column names ('Bragg' and 'ID gap')
