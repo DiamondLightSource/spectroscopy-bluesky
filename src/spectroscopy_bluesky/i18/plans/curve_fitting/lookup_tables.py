@@ -177,3 +177,13 @@ def generate_new_ascii_lookuptable(
             }
         )
         dataframe.to_csv(f, header=["Units", "Deg mm"], **lookup_table_kwargs)
+
+
+if __name__ == "__main__":
+    filename = "lookuptable_harmonic1.txt"
+    # beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"  # noqa: E501
+    # filename = beamline_lookuptable_dir + "Si111/lookuptable_harmonic9.txt"
+    filename = "/tmp/fits.txt"
+    dataframe = load_fit_results(filename)
+
+    print(dataframe)

@@ -9,3 +9,7 @@ def max_value(x, height, peak_position, delta=0.01):
 
 def max_value_bounds(xvals, yvals):
     return (min(yvals), min(xvals)), (max(yvals), max(xvals))
+
+
+def quadratic(x, a, b, c) -> float:
+    return a + b * x + c * (x**2)
