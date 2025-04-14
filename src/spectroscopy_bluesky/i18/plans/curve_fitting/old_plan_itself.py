@@ -91,11 +91,7 @@ def undulator_lookuptable_scan(
 
             if adjust_start_gap and len(fit_results) > 1:
                 # extract last two recorded bragg angle and gap value
-                # angles = list(fit_results.keys())[-2:]
-                # last_two_of_interest = list(fit_results)[-2:]
-                # angles = last_two_of_interest[0][0]
                 angles = list(fit_results.keys())[-2:]
-                # gaps = list(fit_results.values())[-2:]
                 gaps = list(fit_results.values())[-2:]
                 grad = (gaps[1] - gaps[0]) / (angles[1] - angles[0])
                 expected_peak = (bragg_angle - angles[-1]) * grad + gaps[-1]
