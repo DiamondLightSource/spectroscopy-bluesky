@@ -1,9 +1,9 @@
 import bluesky.plan_stubs as bps
+import event_model
 from dodal.common import inject
 from dodal.common.types import MsgGenerator
 from dodal.devices import DCM
 from dodal.devices.i18.diode import Diode
-import event_model
 
 DEFAULT_DCM: DCM = inject("dcm")
 DEFAULT_DIODE: Diode = inject("d7diode")
@@ -68,8 +68,9 @@ def align_dcm(
         # use patterngenerator
         # make the undulator gap motor to be something virutal
         pass
-        d = event_model.ComposeDescriptor()
-        e = event_model.ComposeEvent()
+        # todo will need a device like this https://github.com/DiamondLightSource/dodal/blob/e163f793c0c35fda6a2caf2dc9fb68b45a62971e/src/dodal/devices/zocalo/zocalo_results.py#L111
+        # d = event_model.ComposeDescriptor()
+        # e = event_model.ComposeEvent()
 
     else:
         yield from bps.read(diode)

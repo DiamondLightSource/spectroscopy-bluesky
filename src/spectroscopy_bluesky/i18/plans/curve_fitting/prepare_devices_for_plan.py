@@ -1,4 +1,3 @@
-# os.environ['EPICS_CA_SERVER_PORT'] = "6064"  # set the Epics port before other imports, otherwise wrong value is picked up (5054)
 import asyncio
 import os
 import time
@@ -17,6 +16,8 @@ from spectroscopy_bluesky.i18.plans.lookup_tables import (
 from spectroscopy_bluesky.i18.plans.undulator_lookuptable_plan import (
     undulator_lookuptable_scan,
 )
+
+# os.environ['EPICS_CA_SERVER_PORT'] = "6064"  # set the Epics port before other imports, otherwise wrong value is picked up (5054)
 
 
 class EpicsSignalROWithWait(EpicsSignalRO):
@@ -143,7 +144,7 @@ gap_range = 2.5 * (gap_end - gap_start)  # double, to make sure don't miss the p
 gap_start = undulator_gap_value(bragg_start) - 0.5 * gap_range
 
 print(
-    "Bragg angle range : start = %.4f, step = %.4f, num steps = %d"
+    "Bragg angle range : start = %.4f, step = %.4f, num steps = %d"  # noqa: UP031
     % (bragg_start, bragg_step, bragg_num_steps)
 )
 print(
