@@ -1,12 +1,11 @@
 # os.environ['EPICS_CA_SERVER_PORT'] = "6064"  # set the Epics port before other imports, otherwise wrong value is picked up (5054)
 import asyncio
-import math
 import os
 import time
 
 from bluesky import RunEngine
 from bluesky.callbacks.best_effort import BestEffortCallback
-from databroker import Broker, Header
+from databroker import Broker
 from ophyd import EpicsMotor, EpicsSignalRO
 from ophyd.sim import SynAxis, SynGauss
 from ophyd_async.epics.motor import Motor
@@ -18,30 +17,6 @@ from spectroscopy_bluesky.i18.plans.lookup_tables import (
 from spectroscopy_bluesky.i18.plans.undulator_lookuptable_plan import (
     undulator_lookuptable_scan,
 )
-
-
-def save_scan_data_ascii_file(
-    header: Header,
-    file_path,
-    file_name_format="scan_%d.txt",
-    float_format="%.4f",
-    include_index=True,
-):
-    """
-    Save results from running bluesky plan to Ascii file
-    Columns are motor positions, followed by detector readouts
-    """
-    scan_id = header.start.scan_id
-    columns = (*header.start.motors, *header.start.detectors)
-    full_name = file_path + "/" + file_name_format % (scan_id)
-    print(f"Saving data to {full_name}\nColumns : {columns}")
-    header.table().to_csv(
-        full_name,
-        sep="\t",
-        columns=columns,
-        float_format=float_format,
-        index=include_index,
-    )
 
 
 class EpicsSignalROWithWait(EpicsSignalRO):
@@ -148,13 +123,6 @@ else:
 # bragg_start = 55
 # bragg_step = 0.3
 # bragg_num_steps = 20
-
-
-si_d_spacing = 5.4310205
-
-
-def bragg_to_energy(bragg_angle):
-    si_d_spacing * 2 * math.sin(bragg_angle * math.pi / 180.0)
 
 
 # bragg_start = 11.4; bragg_step = 0.3; bragg_num_steps = 7
