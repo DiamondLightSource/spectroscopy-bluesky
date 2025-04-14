@@ -3,6 +3,8 @@ from enum import Enum
 
 os.environ["EPICS_CA_SERVER_PORT"] = "6064"
 
+# NOTE: this is WIP as the thickness logic has not yet been implemented
+
 
 class FilterAValues(Enum):
     """Maps from a short usable name to the string name in EPICS"""
