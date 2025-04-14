@@ -6,7 +6,12 @@ import numpy as np
 from bluesky.preprocessors import subs_decorator
 from bluesky.protocols import Movable, Readable
 
-from spectroscopy_bluesky.i18.plans.curve_fitting import FitCurves, FitCurvesMaxValue
+from spectroscopy_bluesky.i18.plans.curve_fitting.curve_fitting import (
+    FitCurves,
+    FitCurvesMaxValue,
+    fit_quadratic_curve,
+)
+from spectroscopy_bluesky.i18.plans.curve_fitting.stats import normalise_xvals
 from spectroscopy_bluesky.i18.plans.lookup_tables import save_fit_results
 
 
@@ -30,19 +35,6 @@ def bounds_provider(xvals, yvals):
         bounds_b[1],
         bounds_c[1],
     )
-
-
-def normalise_xvals(xvals, yvals):
-    return [x - xvals[0] for x in xvals], yvals
-
-
-def max_value(x, height, peak_position, delta=0.01):
-    delta = (max(x) - min(x)) / 1000
-    return [height if abs(xval - peak_position) < delta else 0.0 for xval in x]
-
-
-def max_value_bounds(xvals, yvals):
-    return (min(yvals), min(xvals)), (max(yvals), max(xvals))
 
 
 fit_curve_callback = FitCurves()
@@ -127,7 +119,7 @@ def undulator_lookuptable_scan(
 
         @subs_decorator(curve_fit_callback)
         def processing_decorated_plan():
-            msg = yield from bsp.list_scan([detector], undulator_gap_device, gap_points)
+            msg = yield from bsp.list_scan([detector], undulator_gap_device, gap_points)  # noqa: B023
             return msg
 
         msg = yield from processing_decorated_plan()
@@ -140,7 +132,7 @@ def undulator_lookuptable_scan(
         last_peak_position = fit_results[bragg_angle]
 
         print(
-            f"Fitted peak position : bragg = {bragg_angle}, undulator gap = {last_peak_position}"
+            f"Fitted peak position : bragg = {bragg_angle}, undulator gap = {last_peak_position}"  # noqa: E501
         )
         bragg_angle += bragg_step
 

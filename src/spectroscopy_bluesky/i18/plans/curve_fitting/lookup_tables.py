@@ -119,6 +119,12 @@ def save_fit_results(filename, bragg_angles, gap_values, fit_params=None):
         }
     )
 
+    save_dataframe_to_fs(filename, fit_params, dataframe)
+
+    return dataframe
+
+
+def save_dataframe_to_fs(filename, fit_params, dataframe: pd.DataFrame) -> None:
     print(f"Saving fit parameters and bragg angle undulator values to {filename}")
     with open(filename, "w") as f:
         if fit_params is not None:
@@ -127,8 +133,6 @@ def save_fit_results(filename, bragg_angles, gap_values, fit_params=None):
                 f"# Quadratic fit parameters (x = Bragg, gap = a + b*x + c*x*x)\n# {json_string}\n"  # noqa: E501
             )
         dataframe.to_csv(f, **lookup_table_kwargs)
-
-    return dataframe
 
 
 def load_fit_results(filename):
