@@ -1,10 +1,10 @@
-from collections.abc import Mapping
-from typing import Any
+from typing import Any, List, Mapping, Optional
 
 import bluesky.plans as bp
-from dodal.common.types import MsgGenerator
-from ophyd_async.core.detector import StandardDetector
-from ophyd_async.epics.motion import Motor
+from bluesky.utils import MsgGenerator
+from ophyd_async.core import StandardDetector
+from ophyd_async.epics.motor import Motor
+from bluesky.protocols import Readable
 
 """
 Dictionary of scan arguments from motor scan_args (start, stop, steps)
@@ -21,10 +21,10 @@ def make_args(motor, scan_args, prefix=""):
 
 
 def step_scan(
-    detectors: list[StandardDetector],
+    detectors: List[Readable],
     motor: Motor,
-    scan_args: list[object],
-    metadata: Mapping[str, Any] | None = None,
+    scan_args: List[object],
+    metadata: Optional[Mapping[str, Any]] = None,
 ) -> MsgGenerator:
     """
     Scan wrapping `bp.scan`
@@ -47,17 +47,17 @@ def step_scan(
         "shape": [1],
         **(metadata or {}),
     }
-    yield from bp.scan(detectors, *args.values(), md=_md_)
+    yield from bp.scan([*detectors], *args.values(), md=_md_)
 
 
 def grid_scan(
-    detectors: list[StandardDetector],
+    detectors: List[Readable],
     motor1: Motor,
-    scan_args1: list[object],
+    scan_args1: List[object],
     motor2: Motor,
-    scan_args2: list[object],
-    metadata: Mapping[str, Any] | None = None,
-    snake_axes: bool | None = None,
+    scan_args2: List[object],
+    metadata: Optional[Mapping[str, Any]] = None,
+    snake_axes: Optional[bool] = None,
 ) -> MsgGenerator:
     """
     Scan wrapping `bp.grid_scan'
