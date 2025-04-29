@@ -8,10 +8,13 @@ from ophyd_async.core import TriggerInfo
 
 
 @dataclass
-class QexafsParams:
+class ExposureScalingParams:
     quad_multiplier: float
     linear_multiplier: float
     constant: float
+
+
+# todo need to make it possible to vary the step size
 
 
 @dataclass
@@ -21,14 +24,15 @@ class Roi:
     )
     start_energy_electron_volts: float
     end_energy_electron_volts: float
-    exposure_miliseconds_per_point: float
-    qexafs_params: QexafsParams  # in all but the last region this is has 0 for quad and linear components
+    exposure_seconds_per_point: float
+    qexafs_params: ExposureScalingParams  # in all but the last region this is has 0 for quad and linear components
 
 
-def get_time(x, p: QexafsParams) -> float:
+def get_time(x, p: ExposureScalingParams) -> float:
     return x**2 * p.quad_multiplier + x * p.linear_multiplier + p.constant
 
 
+# detector is ion chambers (i0, it), maybe also xspres3/4, motor is always the monochromator
 def roi_plan(rois: list[Roi], detector: Readable, motor: Movable) -> MsgGenerator:  # type: ignore
     yield from bps.stage_all(*[detector, motor])
     metadata = CustomPlanMetadata()
@@ -36,21 +40,21 @@ def roi_plan(rois: list[Roi], detector: Readable, motor: Movable) -> MsgGenerato
     sorted_rois = sorted(rois, key=lambda x: x.start_energy_electron_volts)
     for index, region_of_interest in enumerate(sorted_rois):
         print(f"working on roi no: {index}")
-        exposure_in_miliseconds_per_each_point_in_this_roi = get_time(
-            region_of_interest.start_energy_electron_volts,
-            region_of_interest.qexafs_params,
-        )
         for s in np.linspace(
             region_of_interest.start_energy_electron_volts,
             region_of_interest.end_energy_electron_volts,
             region_of_interest.number_of_exposure_points,
         ):
+            exposure_for_this_step = get_time(
+                s,
+                region_of_interest.qexafs_params,
+            )
             # todo note this motor must be the right one
             yield from bps.mv(motor, s)
             yield from bps.prepare(
                 detector,
                 TriggerInfo(
-                    livetime=exposure_in_miliseconds_per_each_point_in_this_roi,
+                    livetime=exposure_for_this_step,
                     number_of_triggers=1,
                 ),
             )
