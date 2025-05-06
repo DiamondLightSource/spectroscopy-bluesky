@@ -1,15 +1,76 @@
 import json
 import math
+import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from ophyd_async.core import StandardReadable
 from pydantic import BaseModel
 
 from spectroscopy_bluesky.i18.plans.curve_fitting.curve_fitting import (
     fit_quadratic_curve,
 )
 from spectroscopy_bluesky.i18.plans.curve_fitting.stats import quadratic
+
+
+class BraggAngleToDistancePerpConverter:
+    constant_top = 12.82991823
+    constant_subtract = -0.33493688
+    constant_inverse = 12.489
+
+    def __init__(
+        self, constant_top: float, constant_subtract: float, constant_inverse: float
+    ):
+        self.constant_top = constant_top
+        self.constant_subtract = constant_subtract
+        self.constant_inverse = constant_inverse
+
+    def bragg_angle_degrees_to_distance(self, angle: float) -> float:
+        return (self.constant_top / math.cos(angle / math.pi)) - self.constant_subtract
+
+    def distance_mm_to_bragg_angle_degrees(self, distance: float) -> float:
+        return self.constant_inverse / distance
+
+    @staticmethod
+    def create_from_file(path: Path) -> "BraggAngleToDistancePerpConverter":
+        with open(path) as f:
+            content = f.read()
+
+        # Extract constants from ExpressionStoT
+        sto_t_match = re.search(
+            r"<ExpressionStoT>(\d+\.\d+)/cos\(X/.*?\)-(\d+\.\d+)</ExpressionStoT>",
+            content,
+        )
+        if not sto_t_match:
+            raise ValueError("Failed to parse <ExpressionStoT> from file")
+
+        constant_top = float(sto_t_match.group(1))
+        constant_subtract = float(sto_t_match.group(2))
+
+        # Extract constant from ExpressionTtoS
+        t_to_s_match = re.search(
+            r"<ExpressionTtoS>(\d+\.\d+)/X</ExpressionTtoS>",
+            content,
+        )
+        if not t_to_s_match:
+            raise ValueError("Failed to parse <ExpressionTtoS> from file")
+
+        constant_inverse = float(t_to_s_match.group(1))
+
+        return BraggAngleToDistancePerpConverter(
+            constant_top, constant_subtract, constant_inverse
+        )
+
+
+# /scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml  # noqa: E501
+# <JEPQuantityConverter>
+# <ExpressionStoT>12.82991823/cos(X/(180/(4.0*atan(1.0))))-0.33493688</ExpressionStoT>
+# <ExpressionTtoS>12.489/X</ExpressionTtoS>
+# <AcceptableSourceUnits>Deg</AcceptableSourceUnits>
+# <AcceptableTargetUnits>mm</AcceptableTargetUnits>
+# <SourceMinIsTargetMax>false</SourceMinIsTargetMax>
+# </JEPQuantityConverter>
 
 
 class LookupTableSettings(BaseModel):
@@ -19,7 +80,7 @@ class LookupTableSettings(BaseModel):
     column_names: list[str] = ["Bragg [deg]", "ID gap [mm]"]
 
 
-class LookupTable:
+class DcmToFSForwarder(StandardReadable):
     def __init__(self, path: Path, settings: LookupTableSettings | None = None):
         self._settings = settings or LookupTableSettings()
         self._path = path
@@ -41,7 +102,7 @@ class LookupTable:
             raise ValueError("Dataframe not loaded")
         return dict(
             zip(self._dataframe.iloc[:, 0], self._dataframe.iloc[:, 1], strict=False)
-        )
+        )  # type: ignore
 
     def fit(self, **kwargs) -> None:
         if self._dataframe is None:
@@ -134,3 +195,19 @@ class LookupTable:
             iter_num += 1
 
         return (lower[0] + upper[0]) / 2.0
+
+
+from spectroscopy_bluesky.i18.config_server.perp_converter import (
+    BraggAngleToDistancePerpConverter,
+)
+
+if __name__ == "__main__":
+    ## Test evaluator
+    config_root = "/scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config"  # noqa: E501
+    filename = f"{config_root}/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml"
+
+    converter = BraggAngleToDistancePerpConverter.create_from_file(filename)
+    for angle in range(10, 20):
+        distance = converter.bragg_angle_degrees_to_distance(angle)
+        print(f"for angle {angle} there is distance: {distance}")
+        # todo write the test
