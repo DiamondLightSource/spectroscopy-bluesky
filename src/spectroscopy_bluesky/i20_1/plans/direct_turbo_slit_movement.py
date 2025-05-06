@@ -3,6 +3,7 @@ import numpy as np
 from bluesky.plans import count
 from bluesky.protocols import Movable, Readable
 from bluesky.utils import MsgGenerator
+from dodal.beamlines.i20_1 import turbo_slit
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 
 
@@ -44,3 +45,27 @@ def step_scan_one_motor(
     print("run finished")
     yield from bps.close_run()
     yield from bps.unstage_all(*devices, motor)
+
+
+
+@attach_data_session_metadata_decorator()
+def fly_scan_ts(
+    start: int,
+    stop: int,
+    step: int,
+) -> MsgGenerator:
+    yield from bps.open_run()
+    # yield from bps.abs_set(turbo_slit.velocity, 1)
+    print("not ready at all")
+    # yield from bps.mv(motor, start)
+    # for s in np.linspace(start, stop, step):
+    #     yield from bps.mv(motor, s)
+    #     for r in devices:
+    #         yield from bps.trigger_and_read([r])
+    # print("run finished")
+    # yield from bps.close_run()
+    # yield from bps.unstage_all(*devices, motor)
+
+
+
+

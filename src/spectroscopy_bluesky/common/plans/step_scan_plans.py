@@ -5,6 +5,9 @@ import bluesky.plans as bp
 from bluesky.protocols import Readable
 from bluesky.utils import MsgGenerator
 from ophyd_async.epics.motor import Motor
+from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
+
+
 
 """
 Dictionary of scan arguments from motor scan_args (start, stop, steps)
@@ -19,7 +22,7 @@ def make_args(motor, scan_args, prefix=""):
         "steps" + prefix: int(scan_args[2]),
     }
 
-
+@attach_data_session_metadata_decorator()
 def step_scan(
     detectors: List[Readable],
     motor: Motor,
@@ -49,7 +52,7 @@ def step_scan(
     }
     yield from bp.scan([*detectors], *args.values(), md=_md_)
 
-
+@attach_data_session_metadata_decorator()
 def grid_scan(
     detectors: List[Readable],
     motor1: Motor,
