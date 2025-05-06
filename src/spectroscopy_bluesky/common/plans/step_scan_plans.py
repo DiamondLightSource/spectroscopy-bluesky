@@ -1,10 +1,10 @@
-from typing import Any, List, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any, List, Optional
 
 import bluesky.plans as bp
-from bluesky.utils import MsgGenerator
-from ophyd_async.core import StandardDetector
-from ophyd_async.epics.motor import Motor
 from bluesky.protocols import Readable
+from bluesky.utils import MsgGenerator
+from ophyd_async.epics.motor import Motor
 
 """
 Dictionary of scan arguments from motor scan_args (start, stop, steps)
