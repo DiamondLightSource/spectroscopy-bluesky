@@ -2,7 +2,7 @@ import bluesky.plan_stubs as bps
 import numpy as np
 from bluesky.plans import count
 from bluesky.protocols import Movable, Readable
-from dodal.common.types import MsgGenerator
+from bluesky.utils import MsgGenerator
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 
 

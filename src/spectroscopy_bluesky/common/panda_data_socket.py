@@ -1,7 +1,12 @@
 import socket
 import re
 from threading import Thread
-
+"""
+Class to connect to TCP data socket of Panda and cache the frames of data.
+Data connection is established using ASCII format, received data is parsed to
+separate the lines of data from the header information.
+See : https://pandablocks.github.io/PandABlocks-server/master/capture.html
+"""
 class DataSocket :
     def __init__(self, host, port) :
         self.host = host
@@ -52,6 +57,8 @@ class DataSocket :
         self.data_start_index = 0
         self.data_end_index = 0
         self.data_field_names = []
+
+        # read and store the field names, set the data start index. 
         if "fields:" in self.all_data :
             ind = self.all_data.index("fields:") + 1
             field_names = []
@@ -59,7 +66,7 @@ class DataSocket :
                 self.data_field_names.append(self.all_data[ind].strip().split()[0])
                 ind += 1
 
-            # start index of data is after empty line following the fields
+            # the start index of the data lines is after the empty line following the field names
             self.data_start_index = ind+1
         
         # set the end index of the data
