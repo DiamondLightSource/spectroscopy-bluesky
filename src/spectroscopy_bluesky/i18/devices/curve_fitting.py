@@ -22,10 +22,14 @@ class FitCurves(CollectThenCompute):
 
     def __init__(self):
         super().__init__()
-        self.fit_function = None
-        self.fit_bounds = None
+        self.fit_function = None  # use trial_gaussian
+        self.fit_bounds = None  # use bounds_provider
         self.results = []
-        self.transform_function = None
+        # A function to be applied to the x and y values before curve fitting
+        # i.e. xvals_to_fit, yvals_to_fit = transform_function(xvals, yvals)
+        self.transform_function = None  # use normalise_evals
+        # Set a function to be used to compute the bounds to be used when fitting
+        # The xvals and yvals are passed to the function, and it should
         self.bounds = None  # static bounds
         self.bounds_provider = (
             None  # function that provides bounds based on x and y values
@@ -46,8 +50,7 @@ class FitCurves(CollectThenCompute):
 
         if bounds is None:
             return curve_fit(self.fit_function, xvals, yvals)
-        else:
-            return curve_fit(self.fit_function, xvals, yvals, bounds=bounds)
+        return curve_fit(self.fit_function, xvals, yvals, bounds=bounds)
 
     def determine_scan_shape(self):
         # Extract information about scan shape from start document :
@@ -63,24 +66,6 @@ class FitCurves(CollectThenCompute):
         xvals = [e["data"][inner_loop_motor] for e in self._events]
         yvals = [e["data"][det_name] for e in self._events]
         return xvals, yvals
-
-    def set_transform_function(self, transform_function):
-        """
-            A function to be applied to the x and y values before curve fitting
-            i.e. xvals_to_fit, yvals_to_fit = transform_function(xvals, yvals)
-
-        :param transform_function: takes the xvalues, yvalues and returns new set of values
-        :return:
-        """
-        self.transform_function = transform_function
-
-    def set_bounds_provider(self, bounds_provider):
-        """Set a function to be used to compute the bounds to be used when fitting
-        The xvals and yvals are passed to the function, and it should
-        return a tuple of the bounds ( (lower_bounds), (upper_bounds))
-
-        """
-        self.bounds_provider = bounds_provider
 
     def compute(self):
         """This method is called at run-stop time by the superclass."""
@@ -185,4 +170,5 @@ def _plot_fit(
     plt.ylabel("y")
     plt.title("Curve Fitting")
     plt.grid(True)
-    plt.show()
+    plt.savefig("test_path")
+    # plt.show() # we skip this
