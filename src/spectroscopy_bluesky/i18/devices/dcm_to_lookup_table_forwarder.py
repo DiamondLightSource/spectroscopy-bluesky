@@ -2,16 +2,32 @@ import json
 import math
 import re
 from pathlib import Path
+from typing import Callable
 
+import bluesky.plan_stubs as bps
 import numpy as np
 import pandas as pd
+from dodal.common import inject
+from dodal.common.types import MsgGenerator
+from dodal.devices import DCM
+from dodal.devices.i18.diode import Diode
 from ophyd_async.core import StandardReadable
 from pydantic import BaseModel
+from src.spectroscopy_bluesky.i18.utils.stats import quadratic
 
-from spectroscopy_bluesky.i18.plans.curve_fitting.curve_fitting import (
+from spectroscopy_bluesky.i18.config_server.perp_converter import (
+    BraggAngleToDistancePerpConverter,
+)
+from spectroscopy_bluesky.i18.devices.curve_fitting import (
     fit_quadratic_curve,
 )
-from spectroscopy_bluesky.i18.plans.curve_fitting.stats import quadratic
+
+
+class LookupTableSettings(BaseModel):
+    float_format: str = "%9.5f"
+    sep: str = "\t"
+    index: bool | None = None
+    column_names: list[str] = ["Bragg [deg]", "ID gap [mm]"]
 
 
 class BraggAngleToDistancePerpConverter:
@@ -63,24 +79,14 @@ class BraggAngleToDistancePerpConverter:
         )
 
 
-# /scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml  # noqa: E501
-# <JEPQuantityConverter>
-# <ExpressionStoT>12.82991823/cos(X/(180/(4.0*atan(1.0))))-0.33493688</ExpressionStoT>
-# <ExpressionTtoS>12.489/X</ExpressionTtoS>
-# <AcceptableSourceUnits>Deg</AcceptableSourceUnits>
-# <AcceptableTargetUnits>mm</AcceptableTargetUnits>
-# <SourceMinIsTargetMax>false</SourceMinIsTargetMax>
-# </JEPQuantityConverter>
+class DcmSmartLookupTable(StandardReadable):
+    """
+    just init with filename
+    later just call
+    later add new observations
+    later save
+    """
 
-
-class LookupTableSettings(BaseModel):
-    float_format: str = "%9.5f"
-    sep: str = "\t"
-    index: bool | None = None
-    column_names: list[str] = ["Bragg [deg]", "ID gap [mm]"]
-
-
-class DcmToFSForwarder(StandardReadable):
     def __init__(self, path: Path, settings: LookupTableSettings | None = None):
         self._settings = settings or LookupTableSettings()
         self._path = path
@@ -88,6 +94,15 @@ class DcmToFSForwarder(StandardReadable):
         self._fit_params: np.ndarray | None = None
 
     def load(self, skip_lines: int = 2):
+        """
+        Load 2-colummn x,y Ascii data from file and convert to numbers
+        (optionally skipping the first few lines)
+
+        :param filename:
+        :param lines_to_skip how many lines to skip before storing the data
+        :return: dictionary containing the value on each line { x1:y1, x2:y2 ...}
+
+        """
         print(f"Loading lookup table from {self._path}")
         self._dataframe = pd.read_csv(
             self._path,
@@ -97,17 +112,20 @@ class DcmToFSForwarder(StandardReadable):
         )
         self._dataframe.info()
 
-    def as_dict(self) -> dict:
-        if self._dataframe is None:
-            raise ValueError("Dataframe not loaded")
-        return dict(
-            zip(self._dataframe.iloc[:, 0], self._dataframe.iloc[:, 1], strict=False)
-        )  # type: ignore
-
     def fit(self, **kwargs) -> None:
+        """
+        Load undulator gap lookup table from Ascii file
+        and fit quadratic curve to undlator gap vs Bragg angle
+
+        :param filename:
+        :param kwargs:
+        :return: function that returns the best undulator gap value for a given Bragg angle
+        """
         if self._dataframe is None:
             raise ValueError("Dataframe not loaded")
-        data_dict = self.as_dict()
+        data_dict = dict(
+            zip(self._dataframe.iloc[:, 0], self._dataframe.iloc[:, 1], strict=False)
+        )
         self._fit_params, _ = fit_quadratic_curve(data_dict, **kwargs)
 
     def interpolate(self, bragg_angle: float) -> float:
@@ -116,6 +134,21 @@ class DcmToFSForwarder(StandardReadable):
         return quadratic(bragg_angle, *self._fit_params)
 
     def save_fit_results(self, filename: Path):
+        """
+        Save results from running
+        :py:func:`spectroscopy_bluesky.i18.plans.undulator_lookuptable_scan`
+        plan to Ascii file
+        The top of the file contains :
+        <li> Two lines of header showing fit parameters (if fit_params is set)
+        <li> One header line showing the column names ('Bragg' and 'ID gap')
+        <li> Two columns of data : bragg angle and undulator gap
+
+        :param filename:
+        :param bragg_angles: list of bragg angles
+        :param gap_values: list of undulator gap values
+        :param fit_params: optional fit parameters
+        (quadratic fit to the bragg angle - undulator gap profile)
+        """
         if self._dataframe is None:
             raise ValueError("Dataframe not loaded")
 
@@ -126,15 +159,15 @@ class DcmToFSForwarder(StandardReadable):
                     "# Quadratic fit parameters (x = Bragg, gap = a + b*x + c*x*x)\n"
                     f"# {json_string}\n"
                 )
-            self._dataframe.to_csv(f, **self._settings.dict())
+            self._dataframe.to_csv(f, **self._settings.model_dump())
 
-    def generate_ascii_lookup(
-        self, filename: Path, bragg_start: float, bragg_end: float, bragg_step: float
-    ):
+    def dump_model(self, bragg_start: float, bragg_end: float, bragg_step: float):
         if self._fit_params is None:
             raise ValueError("Fit parameters not available")
 
-        step = abs(bragg_step) if bragg_start < bragg_end else -abs(bragg_step)
+        step = abs(bragg_step)
+        if bragg_start > bragg_end:
+            step = -1 * step
         bragg_vals = np.arange(bragg_start, bragg_end + bragg_step, step).tolist()
         bragg_vals.append(bragg_end)
         gap_vals = [quadratic(v, *self._fit_params) for v in bragg_vals]
@@ -146,7 +179,7 @@ class DcmToFSForwarder(StandardReadable):
             }
         )
 
-        with open(filename, "w") as f:
+        with open(self._path, "w") as f:
             f.write("# bragg    idgap\n")
             dataframe.to_csv(
                 f, header=["Units", "Deg mm"], **self._settings.model_dump()
@@ -171,8 +204,20 @@ class DcmToFSForwarder(StandardReadable):
 
     @staticmethod
     def lookup_value(
-        y_search, func, range_min=0, range_max=100, tolerance=1e-6, max_iters=20
+        y_search,
+        func: Callable[[float], float],
+        range_min=0,
+        range_max=100,
+        tolerance=1e-6,
+        max_iters=20,
     ):
+        """
+        Lookup x value for a curve y(x), such that y_search = y(x)
+        Uses interval bisection to reach desired accuracy tolerance,
+        up to maxiumum number of iterations
+
+        """
+
         def eval_func(x_pos):
             return x_pos, func(x_pos)
 
@@ -197,10 +242,6 @@ class DcmToFSForwarder(StandardReadable):
         return (lower[0] + upper[0]) / 2.0
 
 
-from spectroscopy_bluesky.i18.config_server.perp_converter import (
-    BraggAngleToDistancePerpConverter,
-)
-
 if __name__ == "__main__":
     ## Test evaluator
     config_root = "/scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config"  # noqa: E501
@@ -210,4 +251,12 @@ if __name__ == "__main__":
     for angle in range(10, 20):
         distance = converter.bragg_angle_degrees_to_distance(angle)
         print(f"for angle {angle} there is distance: {distance}")
-        # todo write the test
+
+    # /scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml  # noqa: E501
+    # <JEPQuantityConverter>
+    # <ExpressionStoT>12.82991823/cos(X/(180/(4.0*atan(1.0))))-0.33493688</ExpressionStoT>
+    # <ExpressionTtoS>12.489/X</ExpressionTtoS>
+    # <AcceptableSourceUnits>Deg</AcceptableSourceUnits>
+    # <AcceptableTargetUnits>mm</AcceptableTargetUnits>
+    # <SourceMinIsTargetMax>false</SourceMinIsTargetMax>
+    # </JEPQuantityConverter>
