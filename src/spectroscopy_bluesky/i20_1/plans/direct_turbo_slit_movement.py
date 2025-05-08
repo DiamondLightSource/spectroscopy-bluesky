@@ -25,53 +25,6 @@ from ophyd_async.fastcs.panda import (
     StaticPcompTriggerLogic,
 )
 
-# path_provider = StaticPathProvider(
-#     UUIDFilenameProvider(),
-#     Path("/dls/i20-1/data/2023/cm33897-5/bluesky"),
-# )
-
-# panda = HDFpanda(f"BL20J-EA-panda-02:", path_provider=path_provider, name="panda")
-
-
-def continuous_movement(
-    motors: list[Movable] | None = None, devices: list[Readable] | None = None
-) -> MsgGenerator:
-    if motors is None:
-        motors = []
-    if devices is None:
-        devices = []
-    # yield from bps.stage_all(*devices)
-    # yield from bps.open_run()
-    yield from count(*devices, *motors)
-    print("empty run")
-    # yield from bps.close_run()
-    # yield from bps.unstage_all(*devices)
-
-
-@attach_data_session_metadata_decorator()
-def step_scan_one_motor(
-    start: int,
-    stop: int,
-    step: int,
-    motor: Movable,
-    devices: list[Readable] | None = None,
-) -> MsgGenerator:
-    print(f"motor: {motor}, devices: {devices}")
-    if devices is None:
-        devices = []
-    yield from bps.stage_all(*devices, motor)
-    yield from bps.open_run()
-    yield from bps.abs_set(motor.velocity, 1)
-    print("preparing the run")
-    yield from bps.mv(motor, start)
-    for s in np.linspace(start, stop, step):
-        yield from bps.mv(motor, s)
-        for r in devices:
-            yield from bps.trigger_and_read([r])
-    print("run finished")
-    yield from bps.close_run()
-    yield from bps.unstage_all(*devices, motor)
-
 
 def fly_scan_ts(
     start: int,
@@ -141,7 +94,7 @@ def fly_sweep(
 
     MOTOR_RESOLUTION = -1 / 10000
 
-    def inner_squared_plan(start, stop):
+    def inner_squared_plan(start: float | int, stop: float | int):
         motor = turbo_slit().xfine
         width = (stop - start) / (num - 1)
         start_pos = start - (width / 2)
@@ -186,7 +139,10 @@ def fly_sweep(
     def inner_plan():
         for n in range(number_of_sweeps):
             even: bool = n % 2 == 0
-            start2, stop2 = (stop, start) if even else start, stop
+            start2, stop2 = (stop, start) if even else (start, stop)
+            print(f"Starting sweep {n} with start: {start2}, stop: {stop2}")
             yield from inner_squared_plan(start2, stop2)
+            print(f"Completed sweep {n}")
+            # yield from inner_squared_plan(start2, stop2)
 
     yield from inner_plan()
