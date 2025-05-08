@@ -1,11 +1,7 @@
 import math as mt
-from os import TMP_MAX
 
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
-import numpy as np
-from bluesky.plans import count
-from bluesky.protocols import Movable, Readable
 from bluesky.utils import MsgGenerator
 
 # from dodal.beamlines.i20_1 import panda, turbo_slit
@@ -24,6 +20,38 @@ from ophyd_async.fastcs.panda import (
     PcompInfo,
     StaticPcompTriggerLogic,
 )
+
+MOTOR_RESOLUTION = -1 / 10000
+
+
+def calculate_stuff(start, stop, num):
+    width = (stop - start) / (num - 1)
+    start_modifier = width / 2 if start > stop else (-1) * width / 2
+    start_pos = start + start_modifier
+    stop_modifier = (-1) * start_modifier
+    stop_pos = stop + stop_modifier
+    direction_of_sweep = (
+        PandaPcompDirection.POSITIVE
+        if width / MOTOR_RESOLUTION < 0
+        else PandaPcompDirection.NEGATIVE
+    )
+
+    return width, start_pos, stop_pos, direction_of_sweep
+
+
+def get_pcomp_info(width, start_pos, direction_of_sweep: PandaPcompDirection, num):
+    start_pos_pcomp = mt.floor(start_pos / MOTOR_RESOLUTION)
+    rising_edge_step = mt.ceil(abs(width / MOTOR_RESOLUTION))
+
+    panda_pcomp_info = PcompInfo(
+        start_postion=start_pos_pcomp,
+        pulse_width=1,
+        rising_edge_step=rising_edge_step,
+        number_of_pulses=num,
+        direction=direction_of_sweep,
+    )
+
+    return panda_pcomp_info
 
 
 def fly_scan_ts(
@@ -92,31 +120,18 @@ def fly_sweep(
     """
     panda_pcomp = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
 
-    MOTOR_RESOLUTION = -1 / 10000
-
     def inner_squared_plan(start: float | int, stop: float | int):
-        motor = turbo_slit().xfine
-        width = (stop - start) / (num - 1)
-        start_pos = start - (width / 2)
-        stop_pos = stop + (width / 2)
+        width, start_pos, stop_pos, direction_of_sweep = calculate_stuff(
+            start, stop, num
+        )
+
         motor_info = FlyMotorInfo(
             start_position=start_pos,
             end_position=stop_pos,
             time_for_move=num * duration,
         )
-        direction_of_sweep = (
-            PandaPcompDirection.POSITIVE
-            if width / MOTOR_RESOLUTION > 0
-            else PandaPcompDirection.NEGATIVE
-        )
 
-        panda_pcomp_info = PcompInfo(
-            start_postion=mt.ceil(start_pos / (MOTOR_RESOLUTION)),
-            pulse_width=1,
-            rising_edge_step=mt.ceil(abs(width / MOTOR_RESOLUTION)),
-            number_of_pulses=num,
-            direction=direction_of_sweep,
-        )
+        panda_pcomp_info = get_pcomp_info(width, start_pos, direction_of_sweep, num)
 
         panda_hdf_info = TriggerInfo(
             number_of_events=num,
@@ -125,6 +140,7 @@ def fly_sweep(
             deadtime=1e-5,
         )
 
+        motor = turbo_slit().xfine
         yield from bps.prepare(motor, motor_info)
         yield from bps.prepare(panda, panda_hdf_info)
         yield from bps.prepare(panda_pcomp, panda_pcomp_info, wait=True)
@@ -139,10 +155,20 @@ def fly_sweep(
     def inner_plan():
         for n in range(number_of_sweeps):
             even: bool = n % 2 == 0
-            start2, stop2 = (stop, start) if even else (start, stop)
+            start2, stop2 = (start, stop) if even else (stop, start)
             print(f"Starting sweep {n} with start: {start2}, stop: {stop2}")
             yield from inner_squared_plan(start2, stop2)
             print(f"Completed sweep {n}")
-            # yield from inner_squared_plan(start2, stop2)
 
     yield from inner_plan()
+
+
+if __name__ == "__main__":
+    # todo move into a real unit test
+    my_args = [(1, 10, 10), (10, 1, 10), (1, 10, 10)]
+
+    for tup in my_args:
+        result = calculate_stuff(*tup)
+        print(result)
+        info = get_pcomp_info(result[0], result[1], result[3], 10)
+        print(info)
