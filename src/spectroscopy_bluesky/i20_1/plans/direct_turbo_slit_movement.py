@@ -26,17 +26,13 @@ MOTOR_RESOLUTION = -1 / 10000
 
 def calculate_stuff(start, stop, num):
     width = (stop - start) / (num - 1)
-    start_modifier = width / 2 if start > stop else (-1) * width / 2
-    start_pos = start + start_modifier
-    stop_modifier = (-1) * start_modifier
-    stop_pos = stop + stop_modifier
     direction_of_sweep = (
         PandaPcompDirection.POSITIVE
-        if width / MOTOR_RESOLUTION < 0
+        if width / MOTOR_RESOLUTION > 0
         else PandaPcompDirection.NEGATIVE
     )
 
-    return width, start_pos, stop_pos, direction_of_sweep
+    return width, start, stop, direction_of_sweep
 
 
 def get_pcomp_info(width, start_pos, direction_of_sweep: PandaPcompDirection, num):
@@ -106,28 +102,30 @@ def fly_scan_ts(
 
 
 def fly_sweep(
-    start: int,
-    stop: int,
+    start: float,
+    stop: float,
     num: int,
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 5,
+    runup: float = 0.0
 ) -> MsgGenerator:
-    """
 
-    just just make one long file - that is stage and unstage only once
-
-    """
     panda_pcomp = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
 
     def inner_squared_plan(start: float | int, stop: float | int):
         width, start_pos, stop_pos, direction_of_sweep = calculate_stuff(
             start, stop, num
         )
+    
+        direction_multiplier = -1.0
+        if start < stop :
+            direction_multiplier = 1.0
 
         motor_info = FlyMotorInfo(
-            start_position=start_pos,
-            end_position=stop_pos,
+            # include extra runup distance on start and end positions
+            start_position=start_pos-direction_multiplier*runup,
+            end_position=stop_pos+direction_multiplier*runup,
             time_for_move=num * duration,
         )
 
@@ -141,34 +139,41 @@ def fly_sweep(
         )
 
         motor = turbo_slit().xfine
-        yield from bps.prepare(motor, motor_info)
-        yield from bps.prepare(panda, panda_hdf_info)
+        # move motor to initial position
+        yield from bps.prepare(motor, motor_info, wait=True)
+
+        # prepare pcomp
         yield from bps.prepare(panda_pcomp, panda_pcomp_info, wait=True)
-        yield from bps.kickoff(panda)
         yield from bps.kickoff(panda_pcomp, wait=True)
+
+        # kickoff motor move once pcomp has started
         yield from bps.kickoff(motor, wait=True)
-        yield from bps.complete_all(motor, panda_pcomp, panda, wait=True)
+        
+        yield from bps.complete_all(motor, panda_pcomp, wait=True)
 
     @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
     def inner_plan():
+    
+        # prepare panda and hdf writer once, at start of scan
+        yield from bps.prepare(panda, panda_hdf_info, wait=True)
+        yield from bps.kickoff(panda, wait=True)
+    
         for n in range(number_of_sweeps):
             even: bool = n % 2 == 0
             start2, stop2 = (start, stop) if even else (stop, start)
             print(f"Starting sweep {n} with start: {start2}, stop: {stop2}")
             yield from inner_squared_plan(start2, stop2)
             print(f"Completed sweep {n}")
+    
+        yield from bps.complete_all(panda, wait=True)
 
+    panda_hdf_info = TriggerInfo(
+            number_of_events=num*number_of_sweeps,
+            trigger=DetectorTrigger.CONSTANT_GATE,
+            livetime=duration,
+            deadtime=1e-5,
+        )
+    
     yield from inner_plan()
-
-
-if __name__ == "__main__":
-    # todo move into a real unit test
-    my_args = [(1, 10, 10), (10, 1, 10), (1, 10, 10)]
-
-    for tup in my_args:
-        result = calculate_stuff(*tup)
-        print(result)
-        info = get_pcomp_info(result[0], result[1], result[3], 10)
-        print(info)
