@@ -175,3 +175,87 @@ def fly_sweep(
     )
 
     yield from inner_plan()
+
+
+def fly_sweep_both_ways(
+    start: float,
+    stop: float,
+    num: int,
+    duration: float,
+    panda: HDFPanda = inject("panda"),  # noqa: B008
+    number_of_sweeps: int = 5,
+) -> MsgGenerator:
+
+    panda_pcomp1 = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
+    panda_pcomp2 = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[2]))
+
+    def inner_squared_plan(start: float, stop: float, panda_pcomp: StandardFlyer):
+
+
+        motor_info = FlyMotorInfo(
+            # include extra runup distance on start and end positions
+            start_position=start,
+            end_position=stop,
+            time_for_move=num * duration,
+        )
+
+
+        motor = turbo_slit().xfine
+
+        # move motor to initial position
+        yield from bps.prepare(motor, motor_info, wait=True)
+
+        # prepare pcomp
+        yield from bps.kickoff(panda_pcomp, wait=True)
+
+        # kickoff motor move once pcomp has started
+        yield from bps.kickoff(motor, wait=True)
+        
+        yield from bps.complete_all(motor, panda_pcomp, wait=True)
+
+    @attach_data_session_metadata_decorator()
+    @bpp.run_decorator()
+    @bpp.stage_decorator([panda, panda_pcomp1,panda_pcomp2])
+    def inner_plan():
+
+        width, _, _, direction_of_sweep = calculate_stuff(
+            start, stop, num
+        )
+
+        dir1 = direction_of_sweep
+        dir2 = PandaPcompDirection.POSITIVE if direction_of_sweep == PandaPcompDirection.NEGATIVE else PandaPcompDirection.NEGATIVE
+
+        pcomp_info1 = get_pcomp_info(width, start, dir1, num)
+
+        pcomp_info2 = get_pcomp_info(width, stop, dir2, num)
+
+
+        # prepare panda and hdf writer once, at start of scan
+        yield from bps.prepare(panda, panda_hdf_info, wait=True)
+        yield from bps.kickoff(panda, wait=True)
+
+        # prepare both pcomps
+        yield from bps.prepare(panda_pcomp1, pcomp_info1, wait=True)
+        yield from bps.prepare(panda_pcomp2, pcomp_info2, wait=True)
+
+
+        for n in range(number_of_sweeps):
+            even: bool = n % 2 == 0
+            start2, stop2 = (start, stop) if even else (stop, start)
+            panda_pcomp = panda_pcomp1
+            if not even:
+                panda_pcomp = panda_pcomp2              
+            print(f"Starting sweep {n} with start: {start2}, stop: {stop2}")
+            yield from inner_squared_plan(start2, stop2,panda_pcomp)
+            print(f"Completed sweep {n}")
+    
+        yield from bps.complete_all(panda, wait=True)
+
+    panda_hdf_info = TriggerInfo(
+            number_of_events=num*number_of_sweeps,
+            trigger=DetectorTrigger.CONSTANT_GATE,
+            livetime=duration,
+            deadtime=1e-5,
+        )
+    
+    yield from inner_plan()
