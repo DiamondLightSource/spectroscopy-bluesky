@@ -12,7 +12,16 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 description = "Plans to use at spectroscopy beamlines at DLS"
-dependencies = ["bluesky", "ophyd", "ophyd_async", "dls-dodal", "pandas", "matplotlib", "databroker", "scipy"] 
+dependencies = [
+    "bluesky",
+    "ophyd",
+    "ophyd_async",
+    "dls-dodal",
+    "pandas",
+    "matplotlib",
+    "databroker",
+    "scipy",
+]
 
 dynamic = ["version"]
 license.file = "LICENSE"

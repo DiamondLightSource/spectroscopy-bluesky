@@ -1,23 +1,15 @@
 import json
 import math
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
-import bluesky.plan_stubs as bps
 import numpy as np
 import pandas as pd
-from dodal.common import inject
-from dodal.common.types import MsgGenerator
-from dodal.devices import DCM
-from dodal.devices.i18.diode import Diode
 from ophyd_async.core import StandardReadable
 from pydantic import BaseModel
 from src.spectroscopy_bluesky.i18.utils.stats import quadratic
 
-from spectroscopy_bluesky.i18.config_server.perp_converter import (
-    BraggAngleToDistancePerpConverter,
-)
 from spectroscopy_bluesky.i18.devices.curve_fitting import (
     fit_quadratic_curve,
 )
@@ -246,7 +238,13 @@ if __name__ == "__main__":
     ## Test evaluator
     config_root = "/scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config"  # noqa: E501
     filename = f"{config_root}/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml"
+    # filename = "lookuptable_harmonic1.txt"
+    # beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"  # noqa: E501
+    # filename = beamline_lookuptable_dir + "Si111/lookuptable_harmonic9.txt"
+    # filename = "/tmp/fits.txt"
+    # dataframe = load_fit_results(filename)
 
+    # print(dataframe)
     converter = BraggAngleToDistancePerpConverter.create_from_file(filename)
     for angle in range(10, 20):
         distance = converter.bragg_angle_degrees_to_distance(angle)

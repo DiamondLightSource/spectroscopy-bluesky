@@ -15,9 +15,14 @@ from ophyd import EpicsMotor, EpicsSignalRO
 from ophyd.sim import SynAxis, SynGauss
 from ophyd_async.epics.motor import Motor
 
-from spectroscopy_bluesky.i18.devices.lookup_tables import fit_lookuptable_curve, generate_new_ascii_lookuptable, save_fit_results
+from spectroscopy_bluesky.i18.devices.lookup_tables import (
+    fit_lookuptable_curve,
+    generate_new_ascii_lookuptable,
+    save_fit_results,
+)
 
-# os.environ['EPICS_CA_SERVER_PORT'] = "6064"  # set the Epics port before other imports, otherwise wrong value is picked up (5054)
+# set the Epics port before other imports, otherwise wrong value is picked up (5054)
+# os.environ['EPICS_CA_SERVER_PORT'] = "6064"
 
 
 def undulator_lookuptable_scan(

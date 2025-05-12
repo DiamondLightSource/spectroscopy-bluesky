@@ -3,7 +3,7 @@ from collections.abc import Callable
 import matplotlib.pyplot as plt
 import numpy as np
 from bluesky.callbacks.core import CollectThenCompute
-from scipy.optimize import curve_fit
+from scipy.optimize import Bounds, curve_fit
 
 
 class FitCurves(CollectThenCompute):
@@ -123,6 +123,7 @@ def fit_quadratic_curve(
             (-default_bounds, -default_bounds, -default_bounds),
             (default_bounds, default_bounds, default_bounds),
         )
+        # test_bounds = Bounds(-np.inf, np.inf, True)
 
     # Perform the bounded curve fit
     params_quadratic, cov_quadratic = curve_fit(
