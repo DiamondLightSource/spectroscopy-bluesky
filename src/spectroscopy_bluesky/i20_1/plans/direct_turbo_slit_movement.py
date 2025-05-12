@@ -12,6 +12,7 @@ from ophyd_async.core import (
     DetectorTrigger,
     StandardFlyer,
     TriggerInfo,
+    wait_for_value
 )
 from ophyd_async.epics.motor import FlyMotorInfo
 from ophyd_async.fastcs.panda import (
@@ -20,8 +21,21 @@ from ophyd_async.fastcs.panda import (
     PcompInfo,
     StaticPcompTriggerLogic,
 )
+from ophyd_async.fastcs.panda._block import PandaBitMux, PcompBlock
 
 MOTOR_RESOLUTION = -1 / 10000
+
+
+class _StaticPcompTriggerLogic(StaticPcompTriggerLogic):
+    """For controlling the PandA `PcompBlock` when flyscanning."""
+
+    def __init__(self, pcomp: PcompBlock) -> None:
+        self.pcomp = pcomp
+
+    async def kickoff(self) -> None:
+        await self.pcomp.enable.set(PandaBitMux.ZERO)
+        await self.pcomp.enable.set(PandaBitMux.ONE)
+        await wait_for_value(self.pcomp.active, True, timeout=1)
 
 
 def calculate_stuff(start, stop, num):
@@ -186,8 +200,8 @@ def fly_sweep_both_ways(
     number_of_sweeps: int = 5,
 ) -> MsgGenerator:
 
-    panda_pcomp1 = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
-    panda_pcomp2 = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[2]))
+    panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
+    panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
 
     def inner_squared_plan(start: float, stop: float, panda_pcomp: StandardFlyer):
 
@@ -206,6 +220,7 @@ def fly_sweep_both_ways(
         yield from bps.prepare(motor, motor_info, wait=True)
 
         # prepare pcomp
+        # yield panda_pcomp.enable.set(PandaBitMux.ZERO)
         yield from bps.kickoff(panda_pcomp, wait=True)
 
         # kickoff motor move once pcomp has started
