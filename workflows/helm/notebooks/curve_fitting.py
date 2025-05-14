@@ -4,23 +4,8 @@ import event_model
 import marimo
 import pydantic
 
-from spectroscopy_bluesky.i18.utils.stats import trial_gaussian
-
 __generated_with = "0.13.8"
 app = marimo.App()
-
-
-class RmqConfig(pydantic.BaseModel):
-    rmq_host: str = "rmq"
-    rmq_port: int = 61613
-    rmq_user: str = "user"
-    rmq_password: str = "password"
-    rmq_channel: str = "/topic/public.worker.event"
-
-
-class CallArgs(pydantic.BaseModel):
-    rmq_config: RmqConfig = RmqConfig()
-    # todo add the rest of the args
 
 
 @app.cell
@@ -38,6 +23,18 @@ def _(mo):
         This notebook demonstrates how to perform curve fitting using 
         the `curve_fit` function from `scipy.optimize`. 
         """)
+
+    class RmqConfig(pydantic.BaseModel):
+        rmq_host: str = "rmq"
+        rmq_port: int = 61613
+        rmq_user: str = "user"
+        rmq_password: str = "password"
+        rmq_channel: str = "/topic/public.worker.event"
+
+    class CallArgs(pydantic.BaseModel):
+        rmq_config: RmqConfig = RmqConfig()
+        # todo add the rest of the args
+
     return
 
 
@@ -90,24 +87,9 @@ def _():
 
 @app.cell
 def _():
-    import numpy as np
-    import matplotlib.pyplot as plt
+    from scipy.optimize import Bounds, curve_fit
 
-    x = np.linspace(0, 10, 100)
-    y = np.sin(x) + 0.1 * np.random.normal(size=x.size)
-
-    plt.plot(x, y, "o")
-    plt.title("Sample Data")
-    plt.xlabel("X-axis")
-    plt.ylabel("Y-axis")
-    plt.savefig("sample_data.png")
-    # plt.show()
-    return
-
-
-@app.cell
-def _():
-    from scipy.optimize import curve_fit, Bounds
+    from spectroscopy_bluesky.i18.utils.stats import trial_gaussian
 
     events: list[event_model.Event] = []
 
@@ -138,15 +120,12 @@ def _():
         xvals = [x - xvals[0] for x in xvals]
         row_length = shape[-1]
 
-        def do_fitting(xvals, yvals):
-            peak_index = yvals.index(max(yvals))
-            return [[xvals[peak_index]], None]
-
         for i in range(0, len(events), shape[-1]):
-            param, cov = do_fitting(
-                xvals[i : i + row_length], yvals[i : i + row_length]
-            )
-            results.append([param, cov])
+            xvals_for_this_iter = xvals[i : i + row_length]
+            yvals_for_this_iter = yvals[i : i + row_length]
+            max_index = yvals_for_this_iter.index(max(yvals_for_this_iter))
+            r = [xvals_for_this_iter[max_index], None]
+            results.append(r)
 
     # todo return results back to the rmq
 
@@ -177,7 +156,7 @@ def _():
     import matplotlib.pyplot as plt
     import numpy as np
 
-    def _plot_fit(
+    def plot_fit(
         x_vals: list[float],
         y_vals: list[float],
         params_quadratic,

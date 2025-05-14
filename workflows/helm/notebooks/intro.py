@@ -482,5 +482,22 @@ def _():
     return (tips,)
 
 
+@app.cell
+def _():
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    x = np.linspace(0, 10, 100)
+    y = np.sin(x) + 0.1 * np.random.normal(size=x.size)
+
+    plt.plot(x, y, "o")
+    plt.title("Sample Data")
+    plt.xlabel("X-axis")
+    plt.ylabel("Y-axis")
+    plt.savefig("sample_data.png")
+    # plt.show()
+    return
+
+
 if __name__ == "__main__":
     app.run()
