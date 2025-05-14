@@ -7,6 +7,7 @@ from bluesky.utils import MsgGenerator
 # from dodal.beamlines.i20_1 import panda, turbo_slit
 from dodal.beamlines.i20_1 import turbo_slit
 from dodal.common.coordination import inject
+from ophyd_async.plan_stubs import ensure_connected
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 from ophyd_async.core import (
     DetectorTrigger,
@@ -25,8 +26,12 @@ from ophyd_async.fastcs.panda import (
 from ophyd_async.fastcs.panda._block import PandaBitMux, PcompBlock
 import asyncio
 from aioca import caput
+from ophyd_async.epics.pmac import Pmac, PmacMotor, PmacTrajectoryTriggerLogic, PmacTrajInfo
+from scanspec.specs import Line, fly
+
 
 MOTOR_RESOLUTION = -1 / 10000
+# pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
 
 
 class _StaticPcompTriggerLogic(StaticPcompTriggerLogic):
@@ -289,3 +294,35 @@ def fly_sweep_both_ways(
     )
 
     yield from inner_plan()
+
+@bpp.run_decorator()
+def trajectory_fly_scan(
+        start: float,
+        stop: float,
+        num: int,
+        duration: float,
+        panda: HDFPanda = inject("panda"),  # noqa: B008
+        number_of_sweeps: int = 5,
+    ):
+    pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
+    motor = PmacMotor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+
+    yield from ensure_connected(pmac,motor)
+
+    # multi_line = [Line(motor, 0, 10, 8), Line(motor, 0, 10, 8), Line(motor, 0, 10, 8)]
+
+    multi_line = Line(motor, -30, 30, 100).concat(Line(motor, 30, -30, 100))
+
+    spec = fly(multi_line,0.05)
+    print(spec.axes())
+    info = PmacTrajInfo(spec=spec)
+
+    traj = PmacTrajectoryTriggerLogic(pmac)
+    traj_flyer = StandardFlyer(traj)
+    yield from bps.prepare(traj_flyer,info,wait=True,group="prep")
+    yield from bps.kickoff(traj_flyer, wait=True)
+
+    yield from bps.complete_all(traj_flyer, wait=True)
+
+
+    # yield inner_plan()
