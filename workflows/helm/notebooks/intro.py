@@ -16,9 +16,6 @@ def _(mo):
 def _():
     import marimo as mo
 
-
-
-
     args = mo.cli_args()
     print(args)
     slider = mo.ui.slider(1, 22)
@@ -46,7 +43,7 @@ def _(mo):
     mo.accordion(
         {
             "Tip: disabling automatic execution": mo.md(
-                rf"""
+                r"""
             marimo lets you disable automatic execution: just go into the
             notebook settings and set
 
@@ -484,8 +481,8 @@ def _():
 
 @app.cell
 def _():
-    import numpy as np
     import matplotlib.pyplot as plt
+    import numpy as np
 
     x = np.linspace(0, 10, 100)
     y = np.sin(x) + 0.1 * np.random.normal(size=x.size)

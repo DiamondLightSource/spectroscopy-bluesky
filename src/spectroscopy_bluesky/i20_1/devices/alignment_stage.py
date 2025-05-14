@@ -5,7 +5,8 @@ from ophyd_async.epics.motor import Motor
 
 
 class AlignmentStage(StandardReadable):
-    """ Collection of motors to control the alignment stage """
+    """Collection of motors to control the alignment stage"""
+
     def __init__(self, beamline_prefix: str, name: str = "") -> None:
         with self.add_children_as_readables():
             self.x = Motor(beamline_prefix + "-MO-STAGE-01:X")
