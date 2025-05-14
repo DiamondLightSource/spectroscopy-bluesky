@@ -1,9 +1,9 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ClusterWorkflowTemplate
 metadata:
-  name: hello
+  name: marimo
 spec:
-  entrypoint: hello
+  entrypoint: marimo
   volumeClaimTemplates:
     - metadata:
         name: outputs
@@ -70,7 +70,7 @@ spec:
         - --output-dir
         - /outputs
       source: |
-        {{- .Files.Get "notebooks/hello.ipynb" | fromJson | toPrettyJson | nindent 8 }}
+        {{- .Files.Get "notebooks/intro.py" | fromJson | toPrettyJson | nindent 8 }}
       volumeMounts:
         - name: outputs
           mountPath: /outputs
@@ -83,7 +83,7 @@ spec:
         archive:
           none: {}
 
-  - name: hello
+  - name: marimo
     dag:
       tasks:
       - name: requirements
