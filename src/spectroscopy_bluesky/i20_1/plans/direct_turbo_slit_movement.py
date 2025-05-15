@@ -27,7 +27,7 @@ from ophyd_async.fastcs.panda._block import PandaBitMux, PcompBlock
 import asyncio
 from aioca import caput
 from ophyd_async.epics.pmac import Pmac, PmacMotor, PmacTrajectoryTriggerLogic, PmacTrajInfo
-from scanspec.specs import Line, fly
+from scanspec.specs import Line, fly, Repeat
 
 
 MOTOR_RESOLUTION = -1 / 10000
@@ -295,7 +295,6 @@ def fly_sweep_both_ways(
 
     yield from inner_plan()
 
-@bpp.run_decorator()
 def trajectory_fly_scan(
         start: float,
         stop: float,
@@ -303,26 +302,64 @@ def trajectory_fly_scan(
         duration: float,
         panda: HDFPanda = inject("panda"),  # noqa: B008
         number_of_sweeps: int = 5,
-    ):
+    ) -> MsgGenerator:
+
+    panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
+    panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
+    
     pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
     motor = PmacMotor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
 
     yield from ensure_connected(pmac,motor)
 
-    # multi_line = [Line(motor, 0, 10, 8), Line(motor, 0, 10, 8), Line(motor, 0, 10, 8)]
+    spec = fly(
+            Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
+            duration,
+        )
 
-    multi_line = Line(motor, -30, 30, 100).concat(Line(motor, 30, -30, 100))
-
-    spec = fly(multi_line,0.05)
-    print(spec.axes())
     info = PmacTrajInfo(spec=spec)
 
     traj = PmacTrajectoryTriggerLogic(pmac)
     traj_flyer = StandardFlyer(traj)
-    yield from bps.prepare(traj_flyer,info,wait=True,group="prep")
-    yield from bps.kickoff(traj_flyer, wait=True)
 
-    yield from bps.complete_all(traj_flyer, wait=True)
+    @attach_data_session_metadata_decorator()
+    @bpp.run_decorator()
+    @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
+    def inner_plan():
+
+        width, _, _, direction_of_sweep = calculate_stuff(start, stop, num)
+        MRES = -1 / 10000
+
+        dir1 = direction_of_sweep
+        dir2 = (
+            PandaPcompDirection.POSITIVE
+            if direction_of_sweep == PandaPcompDirection.NEGATIVE
+            else PandaPcompDirection.NEGATIVE
+        )
+
+        pcomp_info1 = get_pcomp_info(width, start, dir1, num)
+        pcomp_info2 = get_pcomp_info(width, stop, dir2, num)
+
+        panda_hdf_info = TriggerInfo(
+            number_of_events=num,
+            trigger=DetectorTrigger.CONSTANT_GATE,
+            livetime=duration,
+            deadtime=1e-5,
+        )
 
 
-    # yield inner_plan()
+        yield from bps.prepare(traj_flyer,info,wait=True)
+        # prepare both pcomps
+        yield from bps.prepare(panda_pcomp1, pcomp_info1, wait=True)
+        yield from bps.prepare(panda_pcomp2, pcomp_info2, wait=True)
+        # prepare panda and hdf writer once, at start of scan
+        yield from bps.prepare(panda, panda_hdf_info, wait=True)
+
+
+        yield from bps.kickoff(panda, wait=True)
+        yield from bps.kickoff(traj_flyer, wait=True)
+
+        yield from bps.complete_all(traj_flyer, panda, wait=True)
+
+
+    yield from inner_plan()
