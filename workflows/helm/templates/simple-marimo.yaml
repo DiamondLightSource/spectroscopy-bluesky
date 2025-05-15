@@ -5,7 +5,7 @@ metadata:
   labels:
     workflows.diamond.ac.uk/science-group: workflows-examples
   annotations:
-    workflows.argoproj.io/title: boiler-plate-example for docs
+    workflows.argoproj.io/title: marimo-uv
     workflows.argoproj.io/description: |
       This is an example demo-ing the marimo with uv setup
 
@@ -41,11 +41,8 @@ spec:
         volumeMounts:
           - name: tmpdir
             mountPath: /tmp
-        command: [uv run {{inputs.parameters.start}}]
-        source: |
-          import numpy as np
-          import json
-          print("Hello from uv")
+        command: [uv run  {{inputs.parameters.start}}]
+        source:  {{ .Files.Get "notebooks/curve_fitting.py" }} 
 
     - name: workflow-entry
       dag:
