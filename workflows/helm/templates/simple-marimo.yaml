@@ -9,7 +9,6 @@ metadata:
     workflows.argoproj.io/description: |
       This is an example demo-ing the marimo with uv setup
 
-
 spec:
   entrypoint: workflow-entry
   arguments:
@@ -42,7 +41,7 @@ spec:
         volumeMounts:
           - name: tmpdir
             mountPath: /tmp
-        command: [bash, -c]
+        command: [sh, -c]
         source: |
           echo "{{ .Files.Get "notebooks/curve_fitting.py" | b64enc }}" | base64 -d > /app/curve_fitting.py
           uv run /app/curve_fitting.py
@@ -61,4 +60,3 @@ spec:
                   value: "{{workflow.parameters.stop}}"
                 - name: step
                   value: "{{workflow.parameters.step}}"
-
