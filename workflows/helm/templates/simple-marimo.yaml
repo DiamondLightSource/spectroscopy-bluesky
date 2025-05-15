@@ -1,0 +1,65 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: marimo-uv
+  labels:
+    workflows.diamond.ac.uk/science-group: workflows-examples
+  annotations:
+    workflows.argoproj.io/title: boiler-plate-example for docs
+    workflows.argoproj.io/description: |
+      This is an example demo-ing the marimo with uv setup
+
+spec:
+  entrypoint: workflow-entry
+  arguments:
+    parameters:
+      - name: start
+        value: "2"
+      - name: stop
+        value: "10"
+      - name: step
+        value: "5"
+  volumeClaimTemplates:
+    - metadata:
+        name: tmpdir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: local-path
+
+  templates:
+    - name: run
+      inputs:
+        parameters:
+          - name: start
+          - name: stop
+          - name: step
+      script:
+        image: ghcr.io/astral-sh/uv:0.7.3
+        volumeMounts:
+          - name: tmpdir
+            mountPath: /tmp
+        command: [uv run {{inputs.parameters.start}}]
+        source: |
+          import numpy as np
+          import json
+          print("Hello from uv")
+
+    - name: workflow-entry
+      dag:
+        tasks:
+
+          - name: run
+            dependencies: []
+            template: run
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{workflow.parameters.start}}"
+                - name: stop
+                  value: "{{workflow.parameters.stop}}"
+                - name: step
+                  value: "{{workflow.parameters.step}}"
+

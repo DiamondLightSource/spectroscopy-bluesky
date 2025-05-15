@@ -21,6 +21,7 @@ dependencies = [
     "matplotlib",
     "databroker",
     "scipy",
+    "marimo>=0.13.9",
 ]
 
 dynamic = ["version"]

@@ -1,3 +1,12 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#    "event-model",
+#    "marimo",
+#    "pydantic",
+# ]
+# ///
+
 # Copyright 2024 Marimo. All rights reserved.
 
 import event_model
@@ -183,3 +192,4 @@ def _():
 
 if __name__ == "__main__":
     app.run()
+
