@@ -17,6 +17,7 @@ def max_value_bounds(xvals, yvals):
 def quadratic(x, a, b, c) -> float:
     return a + b * x + c * (x**2)
 
+
 def trial_gaussian(x, a, b, c):
     return a * np.exp(-(((x - c) * b) ** 2))
 

@@ -1,7 +1,3 @@
-
-
-
-
 query = """
 mutation {
     submitWorkflowTemplate(name: "numpy-benchmark", parameters: {size: 2000, memory: "20Gi"}, visit:  {

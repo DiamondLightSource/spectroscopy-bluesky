@@ -30,7 +30,7 @@ def _(mo):
     mo.md(r"""
         # Curve Fitting with Marimo
         This notebook demonstrates how to perform curve fitting using 
-        the `curve_fit` function from `scipy.optimize`. 
+        the `curve_fit` function from `scipy.optimize`.
         """)
 
     class RmqConfig(pydantic.BaseModel):
@@ -192,4 +192,3 @@ def _():
 
 if __name__ == "__main__":
     app.run()
-
