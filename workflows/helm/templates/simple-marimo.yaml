@@ -44,7 +44,7 @@ spec:
         command: [sh, -c]
         source: |
           echo "{{ .Files.Get "notebooks/curve_fitting.py" | b64enc }}" | base64 -d > /app/curve_fitting.py
-          uv run /app/curve_fitting.py {{inputs.parameters.start}} {{inputs.parameters.stop}} {{inputs.parameters.step}}
+          uv run /app/curve_fitting.py -- {{inputs.parameters.start}} {{inputs.parameters.stop}} {{inputs.parameters.step}}
 
     - name: workflow-entry
       dag:

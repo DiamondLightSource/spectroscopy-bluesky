@@ -155,7 +155,7 @@ def _():
     # quadratic_bounds = Bounds(-100, 100)
     bounds = Bounds([-100, -10, -100], [100, 10, 100])
     # todo I need to actually get the values right
-    parameters_optimal, covariance, infodict, msg, found_flag = curve_fit(
+    parameters_optimal, covariance = curve_fit(
         # lambda x, a: a * x + 5,
         trial_gaussian,
         np.array([1, 2, 3]),
@@ -167,7 +167,7 @@ def _():
 
     # for quad term near zero
     # linear_bounds = Bounds(-1e-12, 1e-12)
-    params_optimal_linear, covariance, infodict, msg, found_flag = curve_fit(
+    params_optimal_linear, covariance = curve_fit(
         # lambda x, a: a * x + 5,
         trial_gaussian,
         [1, 2, 3],
