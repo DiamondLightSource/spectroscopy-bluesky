@@ -1,34 +1,37 @@
+import asyncio
 import math as mt
 
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
+from aioca import caput
 from bluesky.utils import MsgGenerator
 
 # from dodal.beamlines.i20_1 import panda, turbo_slit
 from dodal.beamlines.i20_1 import turbo_slit
 from dodal.common.coordination import inject
-from ophyd_async.plan_stubs import ensure_connected
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 from ophyd_async.core import (
     DetectorTrigger,
     StandardFlyer,
     TriggerInfo,
     wait_for_value,
-    FlyerController,
 )
 from ophyd_async.epics.motor import FlyMotorInfo
+from ophyd_async.epics.pmac import (
+    Pmac,
+    PmacMotor,
+    PmacTrajectoryTriggerLogic,
+    PmacTrajInfo,
+)
 from ophyd_async.fastcs.panda import (
     HDFPanda,
     PandaPcompDirection,
     PcompInfo,
     StaticPcompTriggerLogic,
 )
-from ophyd_async.fastcs.panda._block import PandaBitMux, PcompBlock
-import asyncio
-from aioca import caput
-from ophyd_async.epics.pmac import Pmac, PmacMotor, PmacTrajectoryTriggerLogic, PmacTrajInfo
-from scanspec.specs import Line, fly, Repeat
-
+from ophyd_async.fastcs.panda._block import PcompBlock
+from ophyd_async.plan_stubs import ensure_connected
+from scanspec.specs import Line, Repeat, fly
 
 MOTOR_RESOLUTION = -1 / 10000
 # pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
@@ -163,13 +166,6 @@ def fly_sweep(
 
         panda_pcomp_info = get_pcomp_info(width, start_pos, direction_of_sweep, num)
 
-        panda_hdf_info = TriggerInfo(
-            number_of_events=num,
-            trigger=DetectorTrigger.CONSTANT_GATE,
-            livetime=duration,
-            deadtime=1e-5,
-        )
-
         motor = turbo_slit().xfine
         # move motor to initial position
         yield from bps.prepare(motor, motor_info, wait=True)
@@ -295,27 +291,27 @@ def fly_sweep_both_ways(
 
     yield from inner_plan()
 
-def trajectory_fly_scan(
-        start: float,
-        stop: float,
-        num: int,
-        duration: float,
-        panda: HDFPanda = inject("panda"),  # noqa: B008
-        number_of_sweeps: int = 5,
-    ) -> MsgGenerator:
 
+def trajectory_fly_scan(
+    start: float,
+    stop: float,
+    num: int,
+    duration: float,
+    panda: HDFPanda = inject("panda"),  # noqa: B008
+    number_of_sweeps: int = 5,
+) -> MsgGenerator:
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
-    
-    pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
+
+    pmac = Pmac(prefix="BL20J-MO-STEP-06", name="pmac")
     motor = PmacMotor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
 
-    yield from ensure_connected(pmac,motor)
+    yield from ensure_connected(pmac, motor)
 
     spec = fly(
-            Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
-            duration,
-        )
+        Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
+        duration,
+    )
 
     info = PmacTrajInfo(spec=spec)
 
@@ -326,9 +322,7 @@ def trajectory_fly_scan(
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
     def inner_plan():
-
         width, _, _, direction_of_sweep = calculate_stuff(start, stop, num)
-        MRES = -1 / 10000
 
         dir1 = direction_of_sweep
         dir2 = (
@@ -347,19 +341,16 @@ def trajectory_fly_scan(
             deadtime=1e-5,
         )
 
-
-        yield from bps.prepare(traj_flyer,info,wait=True)
+        yield from bps.prepare(traj_flyer, info, wait=True)
         # prepare both pcomps
         yield from bps.prepare(panda_pcomp1, pcomp_info1, wait=True)
         yield from bps.prepare(panda_pcomp2, pcomp_info2, wait=True)
         # prepare panda and hdf writer once, at start of scan
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
 
-
         yield from bps.kickoff(panda, wait=True)
         yield from bps.kickoff(traj_flyer, wait=True)
 
         yield from bps.complete_all(traj_flyer, panda, wait=True)
-
 
     yield from inner_plan()
