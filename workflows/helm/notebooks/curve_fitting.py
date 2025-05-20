@@ -16,10 +16,8 @@
 
 # Copyright 2024 Marimo. All rights reserved.
 
-import event_model
-import marimo
-import pydantic
 
+import marimo
 __generated_with = "0.13.8"
 app = marimo.App()
 
@@ -30,9 +28,13 @@ def _():
 
     return (mo,)
 
+# podman run -it   --mount type=bind,src=$(pwd)/workflows/helm/notebooks/,target=/app   --mount type=volume,src=uv-cache,target=/app/.cache/uv   --workdir /app   python:3.11 pip install uv && cd workflows/helm/notebooks && uv  run python  curve_fitting.py
 
 @app.cell
 def _(mo):
+    import event_model
+    import marimo
+    import pydantic
     mo.md(r"""# Welcome to marimo! 🌊🍃""")
     mo.md(r"""
         # Curve Fitting with Marimo
