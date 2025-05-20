@@ -1,11 +1,18 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#    "event-model",
+#    "event-model==1.22.3",
 #    "marimo",
-#    "pydantic",
+#    "pydantic==2.11.4",
+#    "stomp.py",
+#    "scipy==1.15.3",
+#    "matplotlib==3.10.3",
+#    "numpy==2.2.6",
 # ]
 # ///
+
+# podman run -it --network blue-histogramming_default --mount type=tmpfs,target=/tmp   --mount type=bind,src=$(pwd)/workflows/helm/notebooks/,target=/app   --w
+# --woorkdir /app   ghcr.io/astral-sh/uv:bookworm  uv run  curve_fitting.py
 
 # Copyright 2024 Marimo. All rights reserved.
 
@@ -32,6 +39,7 @@ def _(mo):
         This notebook demonstrates how to perform curve fitting using 
         the `curve_fit` function from `scipy.optimize`.
         """)
+    import pydantic
 
     class RmqConfig(pydantic.BaseModel):
         rmq_host: str = "rmq"
@@ -52,7 +60,7 @@ def _(mo):
     args = mo.cli_args()
     print(args)
     print("the above were args, hello world!")
-    # todo validatre the args against the pydantic model
+    # todo validatre the args against the pydantic model, maybe save to some output to confirm this happened
     print("Curve fitting not yet implemented")
     return
 
@@ -96,18 +104,23 @@ def _():
 
 @app.cell
 def _():
+    import numpy as np
+    from event_model import Event
     from scipy.optimize import Bounds, curve_fit
 
-    from spectroscopy_bluesky.i18.utils.stats import trial_gaussian
+    # from spectroscopy_bluesky.i18.utils.stats import trial_gaussian
 
-    events: list[event_model.Event] = []
+    def trial_gaussian(x, a, b, c):
+        return a * np.exp(-(((x - c) * b) ** 2))
+
+    events: list[Event] = []
 
     # todo outer state
     motor_names = []
     main_detector_name = ""
     shape = 2, 100
 
-    def on_event(event: event_model.Event):
+    def on_event(event: Event):
         # process the event
         print(f"Processing event: {event}")
         events.append(event)
@@ -139,24 +152,28 @@ def _():
     # todo return results back to the rmq
 
     outputs = []
-    quadratic_bounds = Bounds(-100, 100)
+    # quadratic_bounds = Bounds(-100, 100)
+    bounds = Bounds([-100, -10, -100], [100, 10, 100])
+    # todo I need to actually get the values right
     parameters_optimal, covariance, infodict, msg, found_flag = curve_fit(
         # lambda x, a: a * x + 5,
         trial_gaussian,
-        [1, 2, 3],
-        [4, 5, 6],
-        bounds=quadratic_bounds,
+        np.array([1, 2, 3]),
+        np.array([4, 5, 6]),
+        p0=[1, 1, 1],
+        bounds=bounds,
     )
     print(f"Output: {outputs}")
 
     # for quad term near zero
-    linear_bounds = Bounds(-1e-12, 1e-12)
+    # linear_bounds = Bounds(-1e-12, 1e-12)
     params_optimal_linear, covariance, infodict, msg, found_flag = curve_fit(
         # lambda x, a: a * x + 5,
         trial_gaussian,
         [1, 2, 3],
         [4, 5, 6],
-        bounds=linear_bounds,
+        # bounds=linear_bounds,
+        bounds=bounds,
     )
 
     print(f"📈 Quadratic fit: {parameters_optimal}")

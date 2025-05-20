@@ -37,14 +37,14 @@ spec:
           - name: stop
           - name: step
       script:
-        image: ghcr.io/astral-sh/uv:0.7.3
+        image: ghcr.io/astral-sh/uv:bookworm
         volumeMounts:
           - name: tmpdir
             mountPath: /tmp
         command: [sh, -c]
         source: |
           echo "{{ .Files.Get "notebooks/curve_fitting.py" | b64enc }}" | base64 -d > /app/curve_fitting.py
-          uv run /app/curve_fitting.py
+          uv run /app/curve_fitting.py {{inputs.parameters.start}} {{inputs.parameters.stop}} {{inputs.parameters.step}}
 
     - name: workflow-entry
       dag:
@@ -55,8 +55,8 @@ spec:
             arguments:
               parameters:
                 - name: start
-                  value: "{{workflow.parameters.start}}"
+                  value: "{{inputs.parameters.start}}"
                 - name: stop
-                  value: "{{workflow.parameters.stop}}"
+                  value: "{{inputs.parameters.stop}}"
                 - name: step
-                  value: "{{workflow.parameters.step}}"
+                  value: "{{inputs.parameters.step}}"
