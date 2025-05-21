@@ -70,8 +70,7 @@ def _():
     from event_model import Event
     from scipy.optimize import Bounds, curve_fit
 
-    # from spectroscopy_bluesky.i18.utils.stats import trial_gaussian # best if published as a pypi package to be honest
-
+    # NOTE: if functions used much, best if published as a pypi package
     def trial_gaussian(x, a, b, c):
         return a * np.exp(-(((x - c) * b) ** 2))
 
