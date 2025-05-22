@@ -40,6 +40,10 @@ def _(mo):
         the `curve_fit` function from `scipy.optimize`.
         """)
 
+    # this is read in the start document too - or descriptor document
+    class CSVDataPayload(pydantic.BaseModel):
+        records: list[dict[str, str]]
+
     class RmqConfig(pydantic.BaseModel):
         rmq_host: str = "rmq"
         rmq_port: int = 61613

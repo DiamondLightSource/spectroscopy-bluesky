@@ -40,6 +40,7 @@ class BraggAngleToDistancePerpConverter:
     def distance_mm_to_bragg_angle_degrees(self, distance: float) -> float:
         return self.constant_inverse / distance
 
+    # todo also add write to file
     @staticmethod
     def create_from_file(path: Path) -> "BraggAngleToDistancePerpConverter":
         with open(path) as f:
