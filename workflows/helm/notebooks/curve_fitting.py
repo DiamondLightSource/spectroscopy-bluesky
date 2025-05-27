@@ -13,10 +13,9 @@
 
 # Copyright 2024 Marimo. All rights reserved.
 
-
 import marimo
 
-__generated_with = "0.13.8"
+__generated_with = "0.13.9"
 app = marimo.App()
 
 
@@ -69,10 +68,11 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(linear_stuff, main_detector_name, motor_names, quad_stuff):
     import numpy as np
     from event_model import Event
     from scipy.optimize import Bounds, curve_fit
+    from typing import TypedDict
 
     # NOTE: if functions used much, best if published as a pypi package
     def trial_gaussian(x, a, b, c):
@@ -80,9 +80,12 @@ def _():
 
     events: list[Event] = []
 
-    motor_names = []
-    main_detector_name = ""
-    shape = 2, 100
+    class AppState(TypedDict):
+        motor_names: list[str]
+        main_detector_name: str
+        shape: tuple[int, int]
+
+    state: AppState = {"motor_names": [], "main_detector_name": "", "shape": (2, 100)}
 
     def on_event(event: Event):
         # process the event
@@ -91,31 +94,31 @@ def _():
         if event.get("name") == "start":
             # start the curve fitting process
             print("Starting curve fitting process...")
-            nonlocal shape
-            shape = event.get("shape") or [event.get("num_points", 0)]
-            print(f"Shape: {shape}")
-            nonlocal motor_names
-            nonlocal main_detector_name
-            motor_names = event.get("motors", [])
-            main_detector_name = event.get("detectors", [])[0]
+            state["shape"] = (
+                event.get("shape") or (event.get("num_points", 0)) or (0, 0)
+            )
+            # shape = event.get("shape") or (event.get("num_points", 0))
+            print(f"Shape: {state.shape}")
+            state["motor_names"] = event.get("motors", [])
+            state["main_detector_name"] = event.get("detectors", [])[0]
 
-    # todo consider a dataframe instead? maybe with polars https://pola.rs/
+    # # todo consider a dataframe instead? maybe with polars https://pola.rs/
     results = []
-    # https://docs.pydantic.dev/latest/examples/files/#csv-files
-    import csv
+    # # https://docs.pydantic.dev/latest/examples/files/#csv-files
+    # import csv
 
-    from pydantic import BaseModel, EmailStr, PositiveInt
+    # from pydantic import BaseModel, EmailStr, PositiveInt
 
-    class Person(BaseModel):
-        name: str
-        age: PositiveInt
-        email: EmailStr
+    # class Person(BaseModel):
+    #     name: str
+    #     age: PositiveInt
+    #     email: EmailStr
 
-    with open("people.csv") as f:
-        reader = csv.DictReader(f)
-        people = [Person.model_validate(row) for row in reader]
+    # with open("people.csv") as f:
+    #     reader = csv.DictReader(f)
+    #     people = [Person.model_validate(row) for row in reader]
 
-    print(people)
+    # print(people)
     # > [Person(name='John Doe', age=30, email='john@example.com'), Person(name='Jane Doe', age=25, email='jane@example.com')]
 
     bounds = Bounds([-100, -10, -100], [100, 10, 100])
@@ -124,9 +127,9 @@ def _():
     yvals = [e["data"][main_detector_name] for e in events]
     # normalize
     xvals = [x - xvals[0] for x in xvals]
-    row_length = shape[-1]
+    row_length = state["shape"][-1]
 
-    for i in range(0, len(events), shape[-1]):
+    for i in range(0, len(events), state["shape"][-1]):
         xvals_for_this_iter = xvals[i : i + row_length]
         yvals_for_this_iter = yvals[i : i + row_length]
         max_index = yvals_for_this_iter.index(max(yvals_for_this_iter))
@@ -183,13 +186,13 @@ def _():
         plt.ylabel("y")
         plt.title("Curve Fitting")
         plt.grid(True)
-        plt.savefig("/tmp/plot.png")
-        # todo this should conform to the expected png / whatever extension is expected
+        plt.savefig("/tmp/plot.png")        # todo this should conform to the expected png / whatever extension is expected
         # https://diamondlightsource.github.io/workflows/docs/how-tos/create-artifacts/
+    return (on_event,)
 
 
 @app.cell
-def _():
+def _(on_event):
     """
     Callback listener that processes collected documents and
     fits detector data with curve :
@@ -246,6 +249,8 @@ def _():
     else:
         conn.subscribe(CHANNEL, id=1, ack="auto")
         conn.disconnect()
+    return
+
 
 
 if __name__ == "__main__":
