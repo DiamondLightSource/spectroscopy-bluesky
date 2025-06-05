@@ -1,8 +1,10 @@
 import asyncio
 import math as mt
+from datetime import datetime
 
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
+import h5py
 import numpy as np
 from aioca import caput
 from bluesky.utils import MsgGenerator
@@ -37,6 +39,8 @@ from ophyd_async.fastcs.panda import (
 from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import ensure_connected
 from scanspec.specs import Line, Repeat, fly
+
+PATH = "/dls/i20-1/data/2023/cm33897-5/bluesky/"
 
 MOTOR_RESOLUTION = -1 / 10000
 # pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
@@ -383,46 +387,50 @@ def seq_table_test(
     MRES = -1 / 10000
     positions = np.linspace(start / MRES, stop / MRES, num, dtype=int)
 
-    duration_in_us = int(duration / 1e-6)
-
     table = SeqTable()
-
-    for _n in range(number_of_sweeps):
-        for pos in positions:
-            table += SeqTable.row(
-                repeats=1,
-                trigger=direction,
-                position=pos,
-                time1=duration_in_us,
-                outa1=True,
-                time2=1,
-                outa2=False,
-            )
-        direction = (
-            SeqTrigger.POSA_LT
-            if direction == SeqTrigger.POSA_GT
-            else SeqTrigger.POSA_GT
-        )
-        positions = positions[::-1]
-
-    # for pos in positions:
-    #     table += SeqTable.row(
-    #         repeats = 1,
-    #         trigger = direction,
-    #         position = pos,
-    #         time1 = duration_in_us,
-    #         outa1 = True,
-    #         time2 = 1,
-    #         outa2 = False
-    #     )
-
-    seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
     # Prepare motor info using trajectory scanning
     spec = fly(
         Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
         duration,
     )
+
+    times = spec.frames().midpoints["DURATION"]
+    positions = spec.frames().midpoints[motor]
+    positions = [int(x / MRES) for x in positions]
+
+    # Writes down the desired positions that were will be written to the sequencer table
+    f = h5py.File(
+        f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
+    )
+    f.create_dataset("time", shape=(1, len(times)), data=times)
+    f.create_dataset("positions", shape=(1, len(positions)), data=positions)
+
+    counter = 0
+    for t, p in zip(times, positions, strict=False):
+        # As we do multiple swipes it's necessary to change the comparison
+        # for triggering the sequencer table.
+        # This is not the best way of doing it but will sufice for now
+        if counter == num:
+            if direction == SeqTrigger.POSA_GT:
+                direction = SeqTrigger.POSA_LT
+            else:
+                direction = SeqTrigger.POSA_GT
+            counter = 0
+
+        table += SeqTable.row(
+            repeats=1,
+            trigger=direction,
+            position=p,
+            time1=int(t / 1e-6),
+            outa1=True,
+            time2=1,
+            outa2=False,
+        )
+
+        counter += 1
+
+    seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
     info = PmacTrajInfo(spec=spec)
 
