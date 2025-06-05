@@ -69,10 +69,11 @@ def _(mo):
 
 @app.cell
 def _(linear_stuff, main_detector_name, motor_names, quad_stuff):
+    from typing import TypedDict
+
     import numpy as np
     from event_model import Event
     from scipy.optimize import Bounds, curve_fit
-    from typing import TypedDict
 
     # NOTE: if functions used much, best if published as a pypi package
     def trial_gaussian(x, a, b, c):
@@ -186,8 +187,11 @@ def _(linear_stuff, main_detector_name, motor_names, quad_stuff):
         plt.ylabel("y")
         plt.title("Curve Fitting")
         plt.grid(True)
-        plt.savefig("/tmp/plot.png")        # todo this should conform to the expected png / whatever extension is expected
+        plt.savefig(
+            "/tmp/plot.png"
+        )  # todo this should conform to the expected png / whatever extension is expected
         # https://diamondlightsource.github.io/workflows/docs/how-tos/create-artifacts/
+
     return (on_event,)
 
 
@@ -250,7 +254,6 @@ def _(on_event):
         conn.subscribe(CHANNEL, id=1, ack="auto")
         conn.disconnect()
     return
-
 
 
 if __name__ == "__main__":

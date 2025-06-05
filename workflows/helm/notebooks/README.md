@@ -1,6 +1,8 @@
 
 ## got it working partway
 
+
+this is assuming we just read all the steps until the end - so that it is not adaptive
 still need the start stop step
 
 podman run -it --network blue-histogramming_default --mount type=tmpfs,target=/tmp   --mount type=bind,src=$(pwd)/workflows/helm/notebooks/,target=/app   --workdir /app   ghcr.io/astral-sh/uv:bookworm  uv run  curve_fitting.py 1 10 1
@@ -21,3 +23,33 @@ Output: []
   params_optimal_linear, covariance = curve_fit(
 📈 Quadratic fit: [ 8.27177395 -0.14286706  6.96625793]
 📉 Linear fit:    [ 4.99998372e+00 -4.10953063e-06  3.41280524e-07]
+
+## graph
+
+```{mermaid}
+sequenceDiagram
+    participant JobServer
+    participant MessageBus
+    participant ListenerService
+    participant DataBucket
+    participant GraphQLAPI
+    participant ConfigServer
+
+    JobServer->>MessageBus: Emit JobStart/JobEnd Events
+    ListenerService->>MessageBus: Subscribe to RUN events
+    MessageBus-->>ListenerService: New Event for RUN
+    loop Until End Event
+        ListenerService->>DataBucket: (optional) Fetch intermediate data
+        ListenerService-->>ListenerService: Buffer Events
+    end
+    ListenerService->>ListenerService: Extract Data + Encode (base64)
+    ListenerService->>GraphQLAPI: Submit Run Artifact
+    GraphQLAPI-->>ListenerService: Return Job ID
+    loop Poll Until Done
+        ListenerService->>GraphQLAPI: Check Job Status
+        GraphQLAPI-->>ListenerService: Return Job Status
+    end
+    ListenerService->>DataBucket: Download Final Artifact
+    ListenerService->>ConfigServer: Upload/Update Config With Artifact
+    ConfigServer-->>ListenerService: ACK Config Update
+```
