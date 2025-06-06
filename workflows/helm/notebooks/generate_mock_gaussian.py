@@ -6,22 +6,11 @@ from io import BytesIO, StringIO
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
-
-
-class BraggAngleData(BaseModel):
-    bragg_angle_x: float
-    gap_x_2: list[float]
-    diode_y: list[float]
-
-
-class HarmonicData(BaseModel):
-    harmonic: int
-    bragg_angles: list[BraggAngleData]
-
-
-class AllHarmonics(BaseModel):
-    harmonics: list[HarmonicData]
+from workflows.helm.notebooks.datatypes import (
+    AllHarmonics,
+    BraggAngleData,
+    HarmonicData,
+)
 
 
 def generate_gaussian_data(

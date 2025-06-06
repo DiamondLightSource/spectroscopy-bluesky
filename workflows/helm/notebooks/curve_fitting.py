@@ -28,8 +28,6 @@ def _():
 
 @app.cell
 def _(mo):
-    import event_model
-    import pydantic
     import ast
 
     mo.md(r"""# Welcome to marimo! 🌊🍃""")
@@ -40,10 +38,10 @@ def _(mo):
         """)
 
     args = mo.cli_args()
-    print(args)
-    print("the above were args, hello world!")
+    print(
+        f"Starting the curve fitting workflow for spectroscopy using arguments: {args}"
+    )
 
-    ### data_encoder.py
     import base64
     from io import BytesIO
 
@@ -56,7 +54,7 @@ def _(mo):
 
     def debug_dataframe(df, name="DataFrame"):
         """
-        Print diagnostics for a pandas DataFrame.
+        UTILITY: Print diagnostics for a pandas DataFrame.
         """
         print(f"--- {name} diagnostics ---")
         print(f"Shape: {df.shape}")
@@ -73,11 +71,6 @@ def _(mo):
         decoded = base64.b64decode(b64_string)
         return pd.read_csv(BytesIO(decoded))
 
-    def dataframe_to_base64_csv(df: pd.DataFrame) -> str:
-        buffer = BytesIO()
-        df.to_csv(buffer, index=False)
-        return base64.b64encode(buffer.getvalue()).decode("utf-8")
-
     raw_shape = args.get("shape")
     new_args = args.to_dict()
     if isinstance(raw_shape, str):
@@ -92,98 +85,84 @@ def _(mo):
     debug_dataframe(df, name="Decoded DataFrame")
 
     print("Curve fitting not yet implemented further")
-    return (call_args,df)
+    return (call_args, df)
 
 
 @app.cell
-def _(linear_stuff, main_detector_name, motor_names, quad_stuff, call_args, BaseModel, df):
-    from typing import TypedDict
-
+def _(df, call_args, debug_dataframe, pd):
     import numpy as np
-    from scipy.optimize import Bounds, curve_fit
+    from scipy.optimize import curve_fit
 
-    class HarmonicData(BaseModel):
-        harmonic: int
-        x: list[float]
-        y: list[float]
-
-    class AllHarmonics(BaseModel):
-        harmonics: list[HarmonicData]
-
-    # todo debug this with the mock data
-
-    print(df)
-    # first stage is gaussian fitting
-    # NOTE: if functions used much, best if published as a pypi package
     def trial_gaussian(x, a, b, c):
         return a * np.exp(-(((x - c) * b) ** 2))
 
-    results = []
-    bounds = ([-100, -10, -100], [100, 10, 100])
+    def fit_peaks_by_bragg(df: pd.DataFrame) -> pd.DataFrame:
+        results = []
+        for bragg_angle, group in df.groupby("x"):
+            x = group["x"].values
+            y = group["y"].values
+            # Initial guess: amplitude=max(y), width=0.1, center=mean(x)
+            p0 = [y.max(), 0.1, x[np.argmax(y)]]
+            try:
+                popt, _ = curve_fit(trial_gaussian, x, y, p0=p0)
+                peak_x = popt[2]
+            except Exception as e:
+                peak_x = np.nan  # or handle as needed
+            results.append({"bragg_angle": bragg_angle, "x": peak_x})
+        return pd.DataFrame(results)
 
-    row_length = call_args.shape[0]
-    cols = call_args.shape[1]
+    fitted_peaks = fit_peaks_by_bragg(df)
+    debug_dataframe(fitted_peaks)
 
-    for i in range(0, cols):
-        xvals_for_this_iter = xvals[i : i + row_length]
-        yvals_for_this_iter = yvals[i : i + row_length]
-        max_index = yvals_for_this_iter.index(max(yvals_for_this_iter))
-        r = [xvals_for_this_iter[max_index], None]
-        results.append(r)
 
-        parameters_optimal_quad, covariance_quad = curve_fit(
-            trial_gaussian,
-            np.array([1, 2, 3]),
-            np.array([4, 5, 6]),
-            p0=[1, 1, 1],
-            bounds=bounds,
-        )
+@app.cell
+def _(fitted_peaks, debug_dataframe, pd, curve_fit, np):
+    import matplotlib.pyplot as plt
 
-        # for quad term near zero
-        # linear_bounds = Bounds(-1e-12, 1e-12)
-        params_optimal_linear, covariance_linear = curve_fit(
-            trial_gaussian,
-            [1, 2, 3],
-            [4, 5, 6],
-            # bounds=linear_bounds,
-            bounds=bounds,
-        )
+    # Inverse quadratic model: y = a / (x - b)**2 + c
+    def inverse_quadratic(x, a, b, c):
+        return a / (x - b) ** 2 + c
 
-        print(f"📈 Quadratic fit: {parameters_optimal_quad}")
-        print(f"📉 Linear fit:    {params_optimal_linear}")
-        results.append([parameters_optimal_quad, covariance_quad])
-        # NOTE: parameters are always a tuple of 3 numbers
+    # Prepare data for fitting
+    xdata = fitted_peaks["bragg_angle"].values
+    ydata = fitted_peaks["x"].values  # gap values
 
-        serialized_results = results
+    # Reasonable initial guess and bounds
+    p0 = [1.0, 0.0, 0.0]
+    bounds = ([0, -100, -100], [1e6, 100, 100])
 
-    def plot_results(
-        linear_stuf: tuple[float, float, float],
-        quad_stuf: tuple[float, float, float],
-        raw_data: list[tuple[float, float]],
-    ):
-        import matplotlib.pyplot as plt
-        import numpy as np
+    # Fit the inverse quadratic
+    try:
+        popt, pcov = curve_fit(inverse_quadratic, xdata, ydata, p0=p0, bounds=bounds)
+    except Exception as e:
+        print(f"Fit failed: {e}")
+        popt = [np.nan, np.nan, np.nan]
 
-        """
-        tuples of parameters and covariance
-        """
-        plt.figure("Curve fit")
-        plt.figure("Curve Fit").clear()
-        plt.plot(raw_data[0], raw_data[1], "x", label="Data")
-        plt.plot(quad_stuff, quad_stuff, "-", label="Quadratic Fit")
-        plt.plot(linear_stuff, linear_stuff, "--", label="Linear Fit")
-        plt.legend()
-        plt.xlabel("x")
-        plt.ylabel("y")
-        plt.title("Curve Fitting")
-        plt.grid(True)
-        plt.savefig(
-            "/tmp/plot.png"
-        )  # todo this should conform to the expected png / whatever extension is expected
-        # https://diamondlightsource.github.io/workflows/docs/how-tos/create-artifacts/
+    # Plot the fit and data
+    plt.figure(figsize=(8, 5))
+    plt.scatter(xdata, ydata, label="Peak gap (from Gaussian fit)", color="blue")
+    xfit = np.linspace(xdata.min(), xdata.max(), 500)
+    yfit = inverse_quadratic(xfit, *popt)
+    plt.plot(xfit, yfit, label="Inverse Quadratic Fit", color="red")
+    plt.xlabel("Bragg Angle")
+    plt.ylabel("Gap (x at peak)")
+    plt.title("Curve Fitting")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig("/tmp/plot.png")  # Interpolate new values every 0.1 in Bragg angle
+    x_interp = np.arange(xdata.min(), xdata.max() + 0.1, 0.1)
+    y_interp = inverse_quadratic(x_interp, *popt)
+    interp_df = pd.DataFrame({"bragg_angle": x_interp, "gap": y_interp})
+    interp_df.to_csv("/tmp/interpolated_gap_vs_bragg.csv", index=False)
 
-    # todo need to get the raw data or just xs and ys
-    return (plot_results,)
+    debug_dataframe(interp_df, name="Interpolated Gap vs Bragg Angle")
+    print(
+        "Saved plot to /tmp/inverse_quadratic_fit.png and CSV to /tmp/interpolated_gap_vs_bragg.csv"
+    )
+    # todo this should conform to the expected png / whatever extension is expected
+    # https://diamondlightsource.github.io/workflows/docs/how-tos/create-artifacts/
+
+    return interp_df
 
 
 if __name__ == "__main__":
