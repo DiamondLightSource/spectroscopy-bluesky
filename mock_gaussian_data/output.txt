@@ -1,4 +1,4 @@
-Timestamp: 2025-06-06T10:02:07.145080
+Timestamp: 2025-06-06T11:10:20.969888
 --- Harmonic 0 diagnostics ---
 Shape: (100, 3)
 Columns: ['x', 'y', 'harmonic']
@@ -9,11 +9,11 @@ harmonic      int64
 dtype: object
 Head:
      x         y  harmonic
-0  0.0 -0.767446         0
-1  1.0  0.630536         0
-2  2.0 -2.148738         0
-3  3.0 -0.375766         0
-4  4.0  0.406168         0
+0  0.0  0.834538         0
+1  1.0  0.107893         0
+2  2.0 -0.705938         0
+3  3.0  0.587083         0
+4  4.0 -0.124292         0
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -37,11 +37,11 @@ harmonic      int64
 dtype: object
 Head:
      x         y  harmonic
-0  5.0 -0.278520         1
-1  6.0  0.972161         1
-2  7.0 -0.329222         1
-3  8.0 -0.578382         1
-4  9.0 -0.441745         1
+0  5.0 -0.544253         1
+1  6.0 -0.890549         1
+2  7.0 -0.061782         1
+3  8.0  0.150641         1
+4  9.0  0.883539         1
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -65,11 +65,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  10.0 -0.997260         2
-1  11.0  0.806607         2
-2  12.0 -0.199714         2
-3  13.0  0.080859         2
-4  14.0  0.756337         2
+0  10.0  1.077087         2
+1  11.0  2.608282         2
+2  12.0  0.053357         2
+3  13.0 -0.988065         2
+4  14.0  0.777450         2
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -93,11 +93,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  15.0  0.076729         3
-1  16.0 -0.647231         3
-2  17.0  0.565838         3
-3  18.0 -1.193863         3
-4  19.0  0.194187         3
+0  15.0  0.498898         3
+1  16.0 -0.610841         3
+2  17.0  0.679980         3
+3  18.0 -0.772792         3
+4  19.0 -0.447226         3
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -121,11 +121,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  20.0  2.092044         4
-1  21.0  0.274208         4
-2  22.0  1.192472         4
-3  23.0 -0.200279         4
-4  24.0 -0.211557         4
+0  20.0 -0.676709         4
+1  21.0  0.861202         4
+2  22.0  0.440451         4
+3  23.0 -0.697209         4
+4  24.0 -0.441125         4
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -149,11 +149,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  25.0 -0.075714         5
-1  26.0  0.645795         5
-2  27.0  1.331001         5
-3  28.0 -0.228569         5
-4  29.0 -1.625632         5
+0  25.0 -2.125849         5
+1  26.0 -0.597513         5
+2  27.0  0.482769         5
+3  28.0 -0.582672         5
+4  29.0  0.112764         5
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -177,11 +177,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  30.0  1.202705         6
-1  31.0 -0.151557         6
-2  32.0  0.619623         6
-3  33.0 -0.712105         6
-4  34.0  0.119203         6
+0  30.0 -1.765099         6
+1  31.0 -0.160307         6
+2  32.0  1.743394         6
+3  33.0 -0.859254         6
+4  34.0 -0.822805         6
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -205,11 +205,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  35.0  1.556079         7
-1  36.0  1.089950         7
-2  37.0  1.846885         7
-3  38.0  0.742532         7
-4  39.0 -0.453782         7
+0  35.0 -0.800978         7
+1  36.0 -2.589304         7
+2  37.0 -0.186362         7
+3  38.0 -0.641299         7
+4  39.0  1.446736         7
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -233,11 +233,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  40.0  0.857598         8
-1  41.0 -0.657301         8
-2  42.0 -0.722586         8
-3  43.0  0.571704         8
-4  44.0 -2.338519         8
+0  40.0  0.971613         8
+1  41.0 -2.117928         8
+2  42.0  1.205558         8
+3  43.0  0.545482         8
+4  44.0  0.626695         8
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -261,11 +261,11 @@ harmonic      int64
 dtype: object
 Head:
       x         y  harmonic
-0  45.0  1.272521         9
-1  46.0 -1.929144         9
-2  47.0 -0.029545         9
-3  48.0 -0.295627         9
-4  49.0 -0.762695         9
+0  45.0  1.087094         9
+1  46.0 -0.123873         9
+2  47.0  1.009700         9
+3  48.0  0.986847         9
+4  49.0  0.038482         9
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 100 entries, 0 to 99
@@ -289,11 +289,11 @@ harmonic      int64
 dtype: object
 Head:
      x         y  harmonic
-0  0.0 -0.767446         0
-1  1.0  0.630536         0
-2  2.0 -2.148738         0
-3  3.0 -0.375766         0
-4  4.0  0.406168         0
+0  0.0  0.834538         0
+1  1.0  0.107893         0
+2  2.0 -0.705938         0
+3  3.0  0.587083         0
+4  4.0 -0.124292         0
 Info:
 <class 'pandas.core.frame.DataFrame'>
 RangeIndex: 1000 entries, 0 to 999

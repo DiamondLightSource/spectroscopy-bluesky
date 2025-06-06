@@ -67,6 +67,11 @@ def main():
             # Save CSV
             csv_path = os.path.join(out_dir, f"gaussian_{i:02d}.csv")
             df.to_csv(csv_path, index=False)
+            # Save base64-encoded CSV
+            b64_csv = dataframe_to_base64_csv(df)
+            b64_csv_path = os.path.join(out_dir, f"gaussian_{i:02d}_base64.txt")
+            with open(b64_csv_path, "w") as b64file:
+                b64file.write(b64_csv)
             # Save plot
             img_path = os.path.join(out_dir, f"gaussian_{i:02d}.png")
             plt.figure()

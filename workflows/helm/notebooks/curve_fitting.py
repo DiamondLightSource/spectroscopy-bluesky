@@ -29,10 +29,9 @@ def _():
 @app.cell
 def _(mo):
     import event_model
-    import marimo
     import pydantic
+    import ast
 
-    DEBUG_FLAG = True
     mo.md(r"""# Welcome to marimo! 🌊🍃""")
     mo.md(r"""
         # Curve Fitting with Marimo
@@ -79,41 +78,25 @@ def _(mo):
         df.to_csv(buffer, index=False)
         return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    def parse_debug_table(file_path: str) -> pd.DataFrame:
-        with open(file_path, "r") as f:
-            lines = f.readlines()
-
-        # Remove comment and units lines
-        data_lines = [
-            line.strip()
-            for line in lines
-            if not line.startswith("#") and not line.startswith("Units")
-        ]
-
-        # Use whitespace to split columns
-        df = pd.read_csv(
-            BytesIO("\n".join(data_lines).encode()),
-            delim_whitespace=True,
-            names=["bragg", "idgap"],
-        )
-        return df
-
-    call_args = CallArgs.model_validate(args)
-    data = call_args.shape
-    if DEBUG_FLAG:
-        # load python txt as csv
-        mock_dataframe = parse_debug_table("./debug_output_table.txt")
-        data = dataframe_to_base64_csv(mock_dataframe)
+    raw_shape = args.get("shape")
+    new_args = args.to_dict()
+    if isinstance(raw_shape, str):
+        shape_value = ast.literal_eval(raw_shape)
+    else:
+        shape_value = raw_shape
+    new_args["shape"] = shape_value
+    call_args = CallArgs.model_validate(new_args)
+    data = call_args.data
     assert isinstance(data, str), 'args["data"] must be a string'
     df = base64_csv_to_dataframe(data)
     debug_dataframe(df, name="Decoded DataFrame")
 
     print("Curve fitting not yet implemented further")
-    return (call_args,)
+    return (call_args,df)
 
 
 @app.cell
-def _(linear_stuff, main_detector_name, motor_names, quad_stuff):
+def _(linear_stuff, main_detector_name, motor_names, quad_stuff, call_args, BaseModel, df):
     from typing import TypedDict
 
     import numpy as np
@@ -126,35 +109,28 @@ def _(linear_stuff, main_detector_name, motor_names, quad_stuff):
 
     class AllHarmonics(BaseModel):
         harmonics: list[HarmonicData]
+
     # todo debug this with the mock data
 
+    print(df)
     # first stage is gaussian fitting
     # NOTE: if functions used much, best if published as a pypi package
     def trial_gaussian(x, a, b, c):
         return a * np.exp(-(((x - c) * b) ** 2))
 
     results = []
-    bounds = Bounds([-100, -10, -100], [100, 10, 100])
+    bounds = ([-100, -10, -100], [100, 10, 100])
 
-    # todo need to create mock events I think those csv are the output, not events
-    events = []
-    xvals = [e["data"][motor_names[-1]] for e in events]
-    yvals = [e["data"][main_detector_name] for e in events]
-    # normalize
-    xvals = [x - xvals[0] for x in xvals]
     row_length = call_args.shape[0]
     cols = call_args.shape[1]
 
-    for i in range(0, len(events), cols):
+    for i in range(0, cols):
         xvals_for_this_iter = xvals[i : i + row_length]
         yvals_for_this_iter = yvals[i : i + row_length]
         max_index = yvals_for_this_iter.index(max(yvals_for_this_iter))
         r = [xvals_for_this_iter[max_index], None]
         results.append(r)
-        # what is the relationship between the scipy based do_fitting and the other fitting
 
-        # quadratic_bounds = Bounds(-100, 100)
-        # todo I need to actually get the values right
         parameters_optimal_quad, covariance_quad = curve_fit(
             trial_gaussian,
             np.array([1, 2, 3]),
@@ -178,17 +154,16 @@ def _(linear_stuff, main_detector_name, motor_names, quad_stuff):
         results.append([parameters_optimal_quad, covariance_quad])
         # NOTE: parameters are always a tuple of 3 numbers
 
-    # todo return results back to the rmq - need to choose what format to use
-    serialized_results = results
-
-    import matplotlib.pyplot as plt
-    import numpy as np
+        serialized_results = results
 
     def plot_results(
         linear_stuf: tuple[float, float, float],
         quad_stuf: tuple[float, float, float],
         raw_data: list[tuple[float, float]],
     ):
+        import matplotlib.pyplot as plt
+        import numpy as np
+
         """
         tuples of parameters and covariance
         """
