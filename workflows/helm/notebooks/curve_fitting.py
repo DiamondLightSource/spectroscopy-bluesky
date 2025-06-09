@@ -15,7 +15,7 @@
 
 import marimo
 
-__generated_with = "0.13.9"
+__generated_with = "0.13.15"
 app = marimo.App()
 
 
@@ -85,11 +85,11 @@ def _(mo):
     debug_dataframe(df, name="Decoded DataFrame")
 
     print("Curve fitting not yet implemented further")
-    return (call_args, df)
+    return debug_dataframe, df, pd
 
 
 @app.cell
-def _(df, call_args, debug_dataframe, pd):
+def _(debug_dataframe, df, pd):
     import numpy as np
     from scipy.optimize import curve_fit
 
@@ -101,22 +101,34 @@ def _(df, call_args, debug_dataframe, pd):
         for bragg_angle, group in df.groupby("x"):
             x = group["x"].values
             y = group["y"].values
-            # Initial guess: amplitude=max(y), width=0.1, center=mean(x)
-            p0 = [y.max(), 0.1, x[np.argmax(y)]]
-            try:
-                popt, _ = curve_fit(trial_gaussian, x, y, p0=p0)
-                peak_x = popt[2]
-            except Exception as e:
-                peak_x = np.nan  # or handle as needed
+            # Filter out NaN and inf values
+            mask = (~np.isnan(x)) & (~np.isnan(y)) & (~np.isinf(x)) & (~np.isinf(y))
+            x = x[mask]
+            y = y[mask]
+            if len(x) == 0 or len(y) == 0:
+                peak_x = np.nan
+            else:
+                # Initial guess: amplitude=max(y), width=0.1, center=mean(x)
+                p0 = [y.max(), 0.1, x[np.argmax(y)]]
+                try:
+                    popt, _ = curve_fit(trial_gaussian, x, y, p0=p0)
+                    peak_x = popt[2]
+                except Exception as e:
+                    peak_x = np.nan  # or handle as needed
             results.append({"bragg_angle": bragg_angle, "x": peak_x})
         return pd.DataFrame(results)
 
     fitted_peaks = fit_peaks_by_bragg(df)
     debug_dataframe(fitted_peaks)
+    filtered_dataframe = df[(df["x"].notna()) & (df["x"] != 0)]
+    debug_dataframe(filtered_dataframe, name="Filtered DataFrame")
+    filtered_dataframe
+    # fitted_peaks
+    return curve_fit, fitted_peaks, np
 
 
 @app.cell
-def _(fitted_peaks, debug_dataframe, pd, curve_fit, np):
+def _(curve_fit, debug_dataframe, fitted_peaks, np, pd):
     import matplotlib.pyplot as plt
 
     # Inverse quadratic model: y = a / (x - b)**2 + c
@@ -156,13 +168,9 @@ def _(fitted_peaks, debug_dataframe, pd, curve_fit, np):
     interp_df.to_csv("/tmp/interpolated_gap_vs_bragg.csv", index=False)
 
     debug_dataframe(interp_df, name="Interpolated Gap vs Bragg Angle")
-    print(
-        "Saved plot to /tmp/inverse_quadratic_fit.png and CSV to /tmp/interpolated_gap_vs_bragg.csv"
-    )
-    # todo this should conform to the expected png / whatever extension is expected
-    # https://diamondlightsource.github.io/workflows/docs/how-tos/create-artifacts/
+    print("Saved plot to /tmp/plot.png and CSV to /tmp/interpolated_gap_vs_bragg.csv")
 
-    return interp_df
+    return
 
 
 if __name__ == "__main__":
