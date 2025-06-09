@@ -26,7 +26,7 @@ Output: []
 
 ## graph
 
-```{mermaid}
+```mermaid
 sequenceDiagram
     participant JobServer
     participant MessageBus
@@ -56,6 +56,6 @@ sequenceDiagram
 
 ## run with
 
-`$ marimo edit curve_fitting.py -- --data="$( <  gaussian_00_base64.txt)" --shape="(100,3)"`
+`marimo edit curve_fitting.py -- --data="$( <  gaussian_00_base64.txt)" --shape="(100,3)"`
 
 Beware the space and parameter injection.
