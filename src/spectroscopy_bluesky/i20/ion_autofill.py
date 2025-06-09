@@ -1,9 +1,13 @@
+import bluesk.plan_stubs as bps
 from dodal.common.coordination import inject
 from dodal.common.types import MsgGenerator
 from dodal.devices.tetramm import TetrammDetector
 
+from spectroscopy_bluesky.i20.devices.gas_rig import GasInjectionController
+
 
 def ion_autofill(
+    gir: GasInjectionController,
     i0: TetrammDetector = inject("i0"),
     it: TetrammDetector = inject("iT"),
     iref: TetrammDetector = inject("iref"),
@@ -25,6 +29,8 @@ def ion_autofill(
     def inject_from_valve(valve_number, target_pressure):
         pass
         # move mode to pressure control
+        yield from bps.mv(gir.pressure_1_mode, 1)
+        # todo finish here
         # open valve
         # wait for pressure to equilibrate
         # close valve
