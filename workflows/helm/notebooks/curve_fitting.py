@@ -124,11 +124,11 @@ def _(debug_dataframe, df, pd):
     debug_dataframe(filtered_dataframe, name="Filtered DataFrame")
     filtered_dataframe
     # fitted_peaks
-    return curve_fit, fitted_peaks, np
+    return curve_fit, filtered_dataframe, np
 
 
 @app.cell
-def _(curve_fit, debug_dataframe, fitted_peaks, np, pd):
+def _(curve_fit, debug_dataframe, filtered_dataframe, np, pd):
     import matplotlib.pyplot as plt
 
     # Inverse quadratic model: y = a / (x - b)**2 + c
@@ -136,8 +136,8 @@ def _(curve_fit, debug_dataframe, fitted_peaks, np, pd):
         return a / (x - b) ** 2 + c
 
     # Prepare data for fitting
-    xdata = fitted_peaks["bragg_angle"].values
-    ydata = fitted_peaks["x"].values  # gap values
+    xdata = filtered_dataframe["bragg_angle"].values
+    ydata = filtered_dataframe["x"].values  # gap values
 
     # Reasonable initial guess and bounds
     p0 = [1.0, 0.0, 0.0]

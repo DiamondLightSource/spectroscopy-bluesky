@@ -69,7 +69,7 @@ def main():
             os.makedirs(harmonic_dir, exist_ok=True)
             bragg_angle_list = []
             all_dfs = []
-            for i, bragg_angle in enumerate(np.linspace(10, 60, 10)):  # 10 Bragg angles
+            for i, bragg_angle in enumerate(np.linspace(72, 5, 10)):  # 10 Bragg angles
                 x, y = generate_gaussian_data(bragg_angle)
                 df = pd.DataFrame({"x": x, "y": y, "bragg_angle": bragg_angle})
                 all_dfs.append(df)
