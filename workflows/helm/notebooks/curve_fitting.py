@@ -3,6 +3,7 @@
 # dependencies = [
 #    "event-model==1.22.3",
 #    "marimo",
+#    "pandas==2.3.0",
 #    "pydantic==2.11.4",
 #    "stomp.py",
 #    "scipy==1.15.3",
