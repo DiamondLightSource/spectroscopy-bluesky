@@ -24,9 +24,11 @@ class GasInjectionController(StandardReadable):
             self.ar_valve = epics_signal_rw(int, prefix + "V3:CON")
             self.kr_valve = epics_signal_rw(int, prefix + "V1:CON")
             self.n2_valve = epics_signal_rw(int, prefix + "V2:CON")
+            # todo possibly extract the pressure detection into a device with separate mode, reaodout and setpoint
             self.pressure_1_mode = epics_signal_r(int, prefix + "PCTRL1:MODE:RD")
-            self.pressure_1_readout = epics_signal_r(int, prefix + "PCTRL1:P:RD")
+            self.pressure_1_readout = epics_signal_r(flaot, prefix + "PCTRL1:P:RD")
             self.pressure_2_mode = epics_signal_r(int, prefix + "PCTRL2:MODE:RD")
+            self.pressure_2_readout = epics_signal_r(float, prefix + "P2")
             self.pressure_1_setpoint = epics_signal_rw(
                 float, prefix + "PCTRL1:SETPOINT:WR"
             )
