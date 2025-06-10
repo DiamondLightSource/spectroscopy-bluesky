@@ -83,17 +83,15 @@ flowchart TD
 
 
     %% Outputs from Pressure 2
-    P2 --> V6[Valve 6] --> ReadoutP2[Readout P2, between the valve and ionc 1715 mBar] --> IONC1
-    P2 --> V7[Valve 7] --> ReadoutP3[Readout P3, between the valve and ionc 1713 mBar] --> IONC2
-    P2 --> V8[Valve 8] --> ReadoutP4[Readout P4, between the valve and ionc 1692 mBar] --> IONC3
-    P2 --> V9[Valve 9] --> ReadoutP5[Readout P5, between the valve and ionc 1611 mBar] --> IONC4
+    P2 --> V6[Valve 6] --> ReadoutP2[Readout P2, between the valve and ionc 1715 mBar] --> IONC1[IONC1 i0]
+    P2 --> V7[Valve 7] --> ReadoutP3[Readout P3, between the valve and ionc 1713 mBar] --> IONC2[IONC2  - it]
+    P2 --> V8[Valve 8] --> ReadoutP4[Readout P4, between the valve and ionc 1692 mBar] --> IONC3[IONC3  - iref]
+    P2 --> V9[Valve 9] --> ReadoutP5[Readout P5, between the valve and ionc 1611 mBar] --> IONC4[IONC4  - i1]
 
     title -.-> Kr
     title -.-> N2
     title -.-> Ar
     title -.-> He
 ```
-
-and IONC1 is i0,
 
 BL20I-EA-GIR-01:VACP1:CON is the pump - on, off, reset
