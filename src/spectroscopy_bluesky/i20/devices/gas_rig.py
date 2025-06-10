@@ -5,6 +5,12 @@ from ophyd_async.epics.core import epics_signal_r, epics_signal_rw
 
 
 class PressureController(StandardReadable):
+    """
+    Pressure controller for gas injection system.
+    in the old system, it was called MFC1 and MFC2.
+    That stood for Mass Flow Controller.
+    """
+
     def __init__(self, prefix: str, name: str = ""):
         with self.add_children_as_readables():
             self.mode = epics_signal_rw(int, prefix + "MODE:RD")
