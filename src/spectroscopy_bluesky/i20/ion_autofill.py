@@ -25,10 +25,31 @@ class IonChamberToFill(enum.Enum):
     iRef = "iRef"
 
 
+def get_gas_valve(gir, gas_to_inject: GasToInject):
+    gas_map = {
+        GasToInject.ARGON: gir.ar_valve,
+        GasToInject.HELIUM: gir.he_valve,
+        GasToInject.KRYPTON: gir.kr_valve,
+        GasToInject.NITROGEN: gir.n2_valve,
+    }
+    return gas_map[gas_to_inject]
+
+
 ionchamber_purge_time = 20.00  # 30
 ionchamber_leak_wait_time = 10.0  # 10
 injection_equilibration_wait_time = 20
 helium_equilibration_wait_time = 10.0
+
+
+def get_chamber_valve(gir, ion_chamber: IonChamberToFill):
+    # Map chamber to the correct valve only
+    chamber_valve_map = {
+        IonChamberToFill.I0: gir.i0_valve,
+        IonChamberToFill.I1: gir.i1_valve,
+        IonChamberToFill.iT: gir.it_valve,
+        IonChamberToFill.iRef: gir.iref_valve,
+    }
+    return chamber_valve_map[ion_chamber]
 
 
 def ion_autofill(
@@ -42,41 +63,13 @@ def ion_autofill(
     we use the light gas (Helium) to make sure that the pressure is positive so that
     we do not get air leak into the ion chamber.
     """
-    # each has a valve and a pressure readout
+    chamber_valve = get_chamber_valve(gir, ion_chamber)
+    gas_valve = get_gas_valve(gir, gas_to_inject)
+    chamber_pressure = (
+        gir.pressure_controller_2
+    )  # Always use controller 2 for chamber valves
 
-    # there is one endpoint for argon injection, another for helium
-
-    # inner plan
-    def inject_argon(target_pressure) -> MsgGenerator:
-        # move mode to pressure control
-        yield from bps.mv(gir.pressure_controller_1.setpoint, target_pressure)
-        # reset and open Argon valve
-        yield from bps.mv(gir.ar_valve, 2)
-        yield from bps.mv(gir.ar_valve, 0)
-        # set mode to pressure control
-        yield from bps.mv(gir.pressure_controller_1.mode, 1)
-        # wait for pressure to equilibrate
-        yield from bps.sleep(injection_equilibration_wait_time)
-        # close valve
-        yield from bps.mv(gir.i0_valve, 1)
-        # set mode back to hold
-        yield from bps.mv(gir.pressure_controller_1.mode, 0)
-        # close argon valve
-        yield from bps.mv(gir.ar_valve, 1)
-
-    def inject_helium_into_i0(target_pressure) -> MsgGenerator:
-        yield from bps.mv(gir.pressure_controller_2.setpoint, target_pressure)
-        yield from bps.mv(gir.pressure_controller_2.mode, 0)
-        # reset and open valve I0
-        yield from bps.mv(gir.i0_valve, 2)
-        yield from bps.mv(gir.i0_valve, 0)
-        # wait for pressure to equilibrate
-        yield from bps.sleep(helium_equilibration_wait_time)
-        # close valve I0
-        yield from bps.mv(gir.i0_valve, 1)
-        # set mode back to hold
-        yield from bps.mv(gir.pressure_controller_2.mode, 1)
-
+    # todo when to run this?
     def purge_line(valve, pressure: float) -> MsgGenerator:
         # turn on the the vacuum pump - reset, open
         yield from bps.mv(gir.vacuum_pump, 0)
@@ -100,32 +93,47 @@ def ion_autofill(
         # turn off the vacuum pump
         yield from bps.mv(gir.vacuum_pump, 1)
 
-    def purge_i0() -> MsgGenerator:
+    def inject_gas(target_pressure) -> MsgGenerator:
+        # move mode to pressure control
+        yield from bps.mv(chamber_pressure.setpoint, target_pressure)
+        # reset and open gas valve
+        yield from bps.mv(gas_valve, 2)
+        yield from bps.mv(gas_valve, 0)
+        # set mode to pressure control
+        yield from bps.mv(chamber_pressure.mode, 1)
+        # wait for pressure to equilibrate
+        yield from bps.sleep(injection_equilibration_wait_time)
+        # close chamber valve
+        yield from bps.mv(chamber_valve, 1)
+        # set mode back to hold
+        yield from bps.mv(chamber_pressure.mode, 0)
+        # close gas valve
+        yield from bps.mv(gas_valve, 1)
+
+    def purge_chamber() -> MsgGenerator:
         # turn on the vacuum pump
         yield from bps.mv(gir.vacuum_pump, 0)
         # reset and open line valve
         yield from bps.mv(gir.line_valve, 2)
         yield from bps.mv(gir.line_valve, 0)
-        # reset and open valve I0
-        yield from bps.mv(gir.i0_valve, 2)
-        yield from bps.mv(gir.i0_valve, 0)
-        base_pressure = (yield from bps.read(gir.pressure_controller_2.readout))[
-            "value"
-        ]
-        # close valve I0
-        yield from bps.mv(gir.i0_valve, 1)
+        # reset and open chamber valve
+        yield from bps.mv(chamber_valve, 2)
+        yield from bps.mv(chamber_valve, 0)
+        base_pressure = (yield from bps.read(chamber_pressure.readout))["value"]
+        # close chamber valve
+        yield from bps.mv(chamber_valve, 1)
         # wait for leak check
         yield from bps.sleep(ionchamber_leak_wait_time)
-        check_pressure = (yield from bps.read(gir.pressure_controller_2.readout))[
-            "value"
-        ]
+        check_pressure = (yield from bps.read(chamber_pressure.readout))["value"]
         if check_pressure - base_pressure > 3:
-            print(f"WARNING, suspected leak in {ionchamber2fill}, stopping here!!!")
-        # close i0
-        yield from bps.mv(gir.i0_valve, 1)
+            print(f"WARNING, suspected leak in {ion_chamber}, stopping here!!!")
+        # close chamber valve
+        yield from bps.mv(chamber_valve, 1)
         # close line valve
         yield from bps.mv(gir.line_valve, 1)
         # turn off the vacuum pump
         yield from bps.mv(gir.vacuum_pump, 1)
 
-    yield from {}
+    # Example usage in your plan:
+    yield from purge_chamber()
+    yield from inject_gas(target_pressure_mbar)
