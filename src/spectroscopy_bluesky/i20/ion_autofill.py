@@ -1,89 +1,44 @@
-import enum
-
-import bluesk.plan_stubs as bps
+import bluesky.plan_stubs as bps
 from dodal.common.types import MsgGenerator
+from dodal.log import LOGGER
 
-from spectroscopy_bluesky.i20.devices.gas_rig import GasInjectionController
+from spectroscopy_bluesky.i20.devices.gas_rig import (
+    GasInjectionController,
+    GasToInject,
+    IonChamberToFill,
+    PressureMode,
+    VacuumPumpCommands,
+    ValveCommands,
+)
 
-# todo are those parameters? those should be generic
-ionchamber2fill = "I0"  # I0, I1, iT, iRef
-targetPressureAr = 35  # mbar
-targetPressureHe = 1800  # mbar
-
-
-class GasToInject(enum.Enum):
-    ARGON = "argon"
-    HELIUM = "helium"
-    KRYPTON = "krypton"
-    NITROGEN = "nitrogen"
-
-
-class IonChamberToFill(enum.Enum):
-    I0 = "I0"
-    I1 = "I1"
-    iT = "iT"
-    iRef = "iRef"
-
-
-def get_gas_valve(gas_injector, gas_to_inject: GasToInject):
-    gas_map = {
-        GasToInject.ARGON: gas_injector.ar_valve,
-        GasToInject.HELIUM: gas_injector.he_valve,
-        GasToInject.KRYPTON: gas_injector.kr_valve,
-        GasToInject.NITROGEN: gas_injector.n2_valve,
-    }
-    return gas_map[gas_to_inject]
-
-
-ionchamber_purge_time = 20.00  # 30
-ionchamber_leak_wait_time = 10.0  # 10
+ionchamber_leak_wait_time = 10.0
 injection_equilibration_wait_time = 20
-helium_equilibration_wait_time = 10.0
-
-
-def get_chamber_valve(gas_injector, ion_chamber: IonChamberToFill):
-    # Map chamber to the correct valve only
-    chamber_valve_map = {
-        IonChamberToFill.I0: gas_injector.i0_valve,
-        IonChamberToFill.I1: gas_injector.i1_valve,
-        IonChamberToFill.iT: gas_injector.it_valve,
-        IonChamberToFill.iRef: gas_injector.iref_valve,
-    }
-    return chamber_valve_map[ion_chamber]
-
-
-class VacuumPumpCommands(enum.Enum):
-    ON = 0
-    OFF = 1
-
-
-class ValveCommands(enum.Enum):
-    RESET = 2
-    OPEN = 0
-    CLOSE = 1
-
-
-class PressureMode(enum.Enum):
-    HOLD = 0
-    PRESSURE_CONTROL = 1
 
 
 def ion_autofill(
     gas_injector: GasInjectionController,
     target_pressure_mbar: float,
-    ion_chamber: IonChamberToFill = IonChamberToFill.I0,
+    ion_chamber: IonChamberToFill = IonChamberToFill.i0,
     gas_to_inject: GasToInject = GasToInject.ARGON,
 ) -> MsgGenerator:
     """
+    Usual usage:
+    targetPressureAr = 35
+    targetPressureHe = 1800
     NOTE scientifically we do small portion of the heavy gas to measure flux
     we use the light gas (Helium) to make sure that the pressure is positive so that
     we do not get air leak into the ion chamber.
+    Parameters:
+    - gas_injector: GasInjectionController instance
+    - target_pressure_mbar: Target pressure in mbar to set in the ion chamber
+    - ion_chamber: IonChamberToFill enum value indicating which ion chamber to fill
+    - gas_to_inject: GasToInject enum value indicating which gas to inject
+    Returns:
+    - A generator that yields messages for the bluesky plan
     """
-    chamber_valve = get_chamber_valve(gas_injector, ion_chamber)
-    gas_valve = get_gas_valve(gas_injector, gas_to_inject)
-    chamber_pressure = (
-        gas_injector.pressure_controller_2
-    )  # Always use controller 2 for chamber valves
+    chamber_valve = gas_injector.get_chamber_valve(ion_chamber)
+    gas_valve = gas_injector.get_gas_valve(gas_to_inject)
+    chamber_pressure = gas_injector.pressure_controller_2
 
     # todo when to run this?
     def purge_line(valve, pressure: float) -> MsgGenerator:
@@ -94,11 +49,17 @@ def ion_autofill(
         yield from bps.mv(gas_injector.line_valve, ValveCommands.RESET)
         yield from bps.mv(gas_injector.line_valve, ValveCommands.OPEN)
         # open valve
-        line_pressure = (
-            yield from bps.rd(gas_injector.pressure_controller_1.readout)
-        )["value"]
+        # todo move this into the device
+        # from ophyd_async.core import observe_value, observe_signals_value
+        # line_pressure_iterator = observe_value(
+        #     gas_injector.pressure_controller_1.readout
+        # )
+        # value = await anext(line_pressure_iterator)
+        line_pressure = (yield from bps.rd(gas_injector.pressure_controller_1.readout))[
+            "value"
+        ]
         LIMIT_PRESSURE = 8.5  # mbar
-        print("purging the gas-supply line...")
+        LOGGER.warn("purging the gas-supply line...")
         while line_pressure > LIMIT_PRESSURE:
             yield from bps.sleep(1)
             line_pressure = (
@@ -129,7 +90,7 @@ def ion_autofill(
         yield from bps.sleep(ionchamber_leak_wait_time)
         check_pressure = (yield from bps.rd(chamber_pressure.readout))["value"]
         if check_pressure - base_pressure > 3:
-            print(f"WARNING, suspected leak in {ion_chamber}, stopping here!!!")
+            LOGGER.warn(f"WARNING, suspected leak in {ion_chamber}, stopping here!!!")
         yield from bps.mv(chamber_valve, ValveCommands.CLOSE)
         yield from bps.mv(gas_injector.line_valve, ValveCommands.CLOSE)
         yield from bps.mv(gas_injector.vacuum_pump, VacuumPumpCommands.OFF)
