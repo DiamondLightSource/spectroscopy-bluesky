@@ -95,14 +95,14 @@ def ion_autofill(
         yield from bps.mv(gas_injector.line_valve, ValveCommands.OPEN)
         # open valve
         line_pressure = (
-            yield from bps.read(gas_injector.pressure_controller_1.readout)
+            yield from bps.rd(gas_injector.pressure_controller_1.readout)
         )["value"]
         LIMIT_PRESSURE = 8.5  # mbar
         print("purging the gas-supply line...")
         while line_pressure > LIMIT_PRESSURE:
             yield from bps.sleep(1)
             line_pressure = (
-                yield from bps.read(gas_injector.pressure_controller_1.readout)
+                yield from bps.rd(gas_injector.pressure_controller_1.readout)
             )["value"]
         yield from bps.mv(gas_injector.line_valve, ValveCommands.CLOSE)
         yield from bps.mv(gas_injector.vacuum_pump, VacuumPumpCommands.OFF)
@@ -123,11 +123,11 @@ def ion_autofill(
         yield from bps.mv(gas_injector.line_valve, ValveCommands.OPEN)
         yield from bps.mv(chamber_valve, ValveCommands.RESET)
         yield from bps.mv(chamber_valve, ValveCommands.OPEN)
-        base_pressure = (yield from bps.read(chamber_pressure.readout))["value"]
+        base_pressure = (yield from bps.rd(chamber_pressure.readout))["value"]
         yield from bps.mv(chamber_valve, ValveCommands.CLOSE)
         # wait for leak check
         yield from bps.sleep(ionchamber_leak_wait_time)
-        check_pressure = (yield from bps.read(chamber_pressure.readout))["value"]
+        check_pressure = (yield from bps.rd(chamber_pressure.readout))["value"]
         if check_pressure - base_pressure > 3:
             print(f"WARNING, suspected leak in {ion_chamber}, stopping here!!!")
         yield from bps.mv(chamber_valve, ValveCommands.CLOSE)
