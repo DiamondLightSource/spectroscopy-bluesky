@@ -14,14 +14,14 @@ from spectroscopy_bluesky.i20_1.plans.direct_turbo_slit_movement import (
 # Typer definitions
 app = typer.Typer(help="CLI Interface for running scans")
 
-_start = typer.Option(help="Starting point of the scan", default=0.0)
+_start = typer.Option(help="Starting position of the scan", default=0.0)
 
-_stop = typer.Option(help="Ending point of the scan", default=10.0)
+_stop = typer.Option(help="Ending position of the scan", default=10.0)
 
 _num = typer.Option(help="Number of points of the scan", default=100)
 
 _duration = typer.Option(
-    help="Duration of each point of the scan in seconds", default=0.01
+    help="Duration of the acquisition starting on the rising edge of a trigger", default=0.01
 )
 
 _sweeps = typer.Option(help="Number of sweeps", default=1)
@@ -42,7 +42,8 @@ def fly_scan_seq_table(
     sweeps: int = _sweeps,
 ):
     """
-    Run a trajectory scan using the sequencer table as a trigger source.
+    Run a trajectory scan using the sequencer table as a trigger source and a trajectory on the PMAC.\n
+    Currently only supports one sequencer table with 4096 points.\n
     This scan requires the `seq_table` design to be loaded in the Panda.
     """
     RE(
@@ -66,7 +67,8 @@ def fly_scan_trajectory(
     sweeps: int = _sweeps,
 ):
     """
-    Run a trajectory scan using the PCOMP block as trigger source.
+    Run a trajectory scan using the PCOMP block as trigger source and a trajectory on the PMAC.\n
+    PCOMP sends a trigger based on the starting position and evenly spaces them.\n
     This scan requires the `pcomp_auto_reset` design to be loaded in the Panda.
     """
     RE(
@@ -90,8 +92,8 @@ def fly_scan(
     sweeps: int = _sweeps,
 ):
     """
-    Run a scan using the PCOMP block as trigger source.
-    This scan does a `kick off` of the motor at each sweep.
+    Run a scan using the PCOMP block as trigger source.\n
+    This scan does a `kick off` of the motor at each sweep.\n
     This scan requires the `pcomp_auto_reset` design to be loaded in the Panda.
     """
     RE(

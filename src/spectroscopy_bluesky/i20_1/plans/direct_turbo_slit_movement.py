@@ -42,7 +42,7 @@ from scanspec.specs import Line, Repeat, fly
 
 PATH = "/dls/i20-1/data/2023/cm33897-5/bluesky/"
 
-MOTOR_RESOLUTION = -1 / 10000
+MRES = -1 / 10000
 # pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
 
 
@@ -73,7 +73,7 @@ def calculate_stuff(start, stop, num):
     width = (stop - start) / (num - 1)
     direction_of_sweep = (
         PandaPcompDirection.POSITIVE
-        if width / MOTOR_RESOLUTION > 0
+        if width / MRES > 0
         else PandaPcompDirection.NEGATIVE
     )
 
@@ -81,8 +81,8 @@ def calculate_stuff(start, stop, num):
 
 
 def get_pcomp_info(width, start_pos, direction_of_sweep: PandaPcompDirection, num):
-    start_pos_pcomp = mt.floor(start_pos / MOTOR_RESOLUTION)
-    rising_edge_step = mt.ceil(abs(width / MOTOR_RESOLUTION))
+    start_pos_pcomp = mt.floor(start_pos / MRES)
+    rising_edge_step = mt.ceil(abs(width / MRES))
 
     panda_pcomp_info = PcompInfo(
         start_postion=start_pos_pcomp,
@@ -112,7 +112,6 @@ def fly_scan_ts(
         width = (stop - start) / (num - 1)
         start_pos = start - (width / 2)
         stop_pos = stop + (width / 2)
-        MRES = -1 / 10000
         motor_info = FlyMotorInfo(
             start_position=start_pos,
             end_position=stop_pos,
@@ -322,6 +321,17 @@ def trajectory_fly_scan(
         duration,
     )
 
+    times = spec.frames().midpoints["DURATION"]
+    positions = spec.frames().midpoints[motor]
+    positions = [int(x / MRES) for x in positions]
+
+    # Writes down the desired positions that will be written to the sequencer table
+    f = h5py.File(
+        f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
+    )
+    f.create_dataset("time", shape=(1, len(times)), data=times)
+    f.create_dataset("positions", shape=(1, len(positions)), data=positions)
+
     info = PmacTrajInfo(spec=spec)
 
     traj = PmacTrajectoryTriggerLogic(pmac)
@@ -384,7 +394,6 @@ def seq_table_test(
     if start < stop:
         direction = SeqTrigger.POSA_LT
 
-    MRES = -1 / 10000
     positions = np.linspace(start / MRES, stop / MRES, num, dtype=int)
 
     table = SeqTable()
@@ -399,7 +408,7 @@ def seq_table_test(
     positions = spec.frames().midpoints[motor]
     positions = [int(x / MRES) for x in positions]
 
-    # Writes down the desired positions that were will be written to the sequencer table
+    # Writes down the desired positions that will be written to the sequencer table
     f = h5py.File(
         f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
     )
