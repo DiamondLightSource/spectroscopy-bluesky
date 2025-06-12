@@ -1,9 +1,30 @@
+"""
+first, we lookup table - calibrate the DCM
+- measure foil, etc Fe, Mg, then absorption spectrum
+then the xanes absorption - then derivative, argmax of the first derivative
+then Bragg offset is adjusted to match the calibrated value
+
+- for 10-15 points inside the energy range for this element
+we scan the gap fo the insertion devise, looking for the maximum
+then quadratic interpolation, written into the file,
+then GDA probably some interpolation
+
+- todo read previous values using the daq-config-server
+- todo take into account a specific harmonic
+"""
+
 import bluesky.plan_stubs as bps
 import numpy as np
 import pandas as pd
 from dodal.common.coordination import inject
 from dodal.common.types import MsgGenerator
 from dodal.devices.diode import D7Diode, Diode
+from scipy.optimize import curve_fit
+
+from spectroscopy_bluesky.i18.utils.workflow_starter import (
+    Visit,
+    call_quadratic_workflow,
+)
 
 DEFAULT_DCM: DCM = inject("dcm")
 DEFAULT_DIODE: Diode = inject("d7diode")
@@ -15,46 +36,44 @@ def trial_gaussian(x, a, b, c):
 
 def align_dcm(
     dcm=DEFAULT_DCM, diode: D7Diode = DEFAULT_DIODE, sim: bool = False
-) -> MsgGenerator:  # noqa: E501
+) -> MsgGenerator:
     """
-    first, we lookup table - calibrate the DCM
-    - measure foil, etc Fe, Mg, then absorption spectrum
-    then the xanes absorption - then derivative, argmax of the first derivative
-    then Bragg offset is adjusted to match the calibrated value
-
-    - for 10-15 points inside the energy range for this element
-    we scan the gap fo the insertion devise, looking for the maximum
-    then quadratic interpolation, written into the file,
-    then GDA probably some interpolation
+    Calibrate the DCM by scanning Bragg and ID gap, fitting a Gaussian to diode current.
     """
-    # read previous values using the daq-config-server
+    # --- Smart scan range setup (copied logic, no import) ---
+    bragg_start = 17.4
+    bragg_step = 0.5
+    bragg_num_steps = 14
 
-    # todo take into account a specific harmonic
+    # Dummy undulator mapping for demonstration (replace with real mapping if available)
+    def undulator_angle_to_gap_mapping(angle):
+        # Example: linear mapping, replace with real calibration
+        return 10 + 0.2 * angle
+
+    gap_start = undulator_angle_to_gap_mapping(bragg_start)
+    gap_end = undulator_angle_to_gap_mapping(bragg_start - bragg_step)
+    gap_range = 2.5 * (gap_end - gap_start)
+    gap_start = undulator_angle_to_gap_mapping(bragg_start) - 0.5 * gap_range
+
+    bragg_range = np.linspace(
+        bragg_start, bragg_start - bragg_step * (bragg_num_steps - 1), bragg_num_steps
+    )
+    idgap_range = np.linspace(gap_start, gap_start + gap_range, 10)
+
     data = pd.DataFrame(columns=["bragg", "id_gap", "diode_current"])
-    bragg_range = np.linspace(0.1, 0.5, 10)  # example range for Bragg angle
-    idgap_range = np.linspace(0.1, 0.5, 10)  # example range for ID gap
-
-    # todo this is actually from the previous scan, we should read it from the file
-    min_idgap_dict = dict.fromkeys(bragg_range, 0.15)  # Replace with real values
+    min_idgap_dict = dict.fromkeys(bragg_range, idgap_range[0])
 
     peak_results = []
-    # outer loop for the Bragg angle
     for angle in bragg_range:
-        # set the Bragg angle
         yield from bps.mv(dcm.bragg, angle)
-        min_idgap = min_idgap_dict.get(angle, 0.15)  # default value if not found
+        min_idgap = min_idgap_dict.get(angle, idgap_range[0])
         fit_idgaps = []
         fit_currents = []
         max_current = -np.inf
         max_idgap = None
-        peak_found = False
 
-        # inner loop for the ID gap
         for gap in idgap_range:
-            # set the ID gap
             yield from bps.mv(dcm.id_gap, gap)
-
-            # measure the diode current
             yield from bps.sleep(1)
             top = yield from bps.rd(diode)
             current = top.value
@@ -63,24 +82,17 @@ def align_dcm(
                 "id_gap": gap,
                 "diode_current": current,
             }
-            # also break the loop if we're past the peak
             if gap >= min_idgap:
                 fit_idgaps.append(gap)
                 fit_currents.append(current)
                 if current > max_current:
                     max_current = current
                     max_idgap = gap
-            # if current readout drops below 10% of the maximum, we assume we passed the peak
             if len(fit_currents) > 5 and current < 0.1 * max_current:
-                peak_found = True
-            break
+                break
         if len(fit_currents) < 5:
-            # not enough data points to fit, skip this angle
             continue
-        # fit the data to a Gaussian function
         try:
-            from scipy.optimize import curve_fit
-
             popt, _ = curve_fit(
                 trial_gaussian,
                 fit_idgaps,
@@ -88,28 +100,15 @@ def align_dcm(
                 p0=[max_current, 1.0, max_idgap],
             )
             peak_gap = popt[2]
-            # NOTE we do not need the peak value, we need the peak gap (argmax of the fit)
             peak_results.append({"bragg": angle, "peak_id_gap": peak_gap})
-
         except Exception as e:
             print(f"Error fitting data for angle {angle}: {e}")
             continue
     print("Peak results:", peak_results)
-    # save the results to a DataFrame
     peak_df = pd.DataFrame(peak_results)
-    # later on marimo workflow will read that file and generate the GDA file.
 
-    # --- Submit peak_df to quadratic workflow ---
-    from spectroscopy_bluesky.i18.devices.workflow_starter import (
-        Visit,
-        call_quadratic_workflow,
-    )
-
-    # Example: fill in with actual visit info
-    visit = Visit(number=1, proposalCode="mg", proposalNumber=36964)
-    graphql_url = (
-        "http://workflows.diamond.ac.uk/graphql"  # Replace with actual endpoint
-    )
+    visit = Visit(number=3, proposalCode="cm", proposalNumber=40636)
+    graphql_url = "http://workflows.diamond.ac.uk/graphql"
 
     try:
         job_id = call_quadratic_workflow(peak_df, visit, graphql_url)

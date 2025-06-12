@@ -59,17 +59,4 @@ def call_quadratic_workflow(
         return job_id
 
     except Exception as e:
-        raise RuntimeError(f"Failed to submit quadratic workflow: {e}")
-
-
-query = """
-mutation {
-    submitWorkflowTemplate(name: "numpy-benchmark", parameters: {size: 2000, memory: "20Gi"}, visit:  {
-    number: 1,
-    proposalCode: "mg",
-    proposalNumber: 36964
-    } ){
-        name
-    }
-}
-"""
+        raise RuntimeError(f"Failed to submit quadratic workflow: {e}")  # noqa: B904
