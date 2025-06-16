@@ -1,3 +1,19 @@
+"""
+Locations on the DLS filesystem where the lookup table files are stored.
+config_root = "/scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config"  # noqa: E501
+beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"  # noqa: E501
+filename = f"{config_root}/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml"
+# /scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml  # noqa: E501
+Example file content:
+<JEPQuantityConverter>
+<ExpressionStoT>12.82991823/cos(X/(180/(4.0*atan(1.0))))-0.33493688</ExpressionStoT>
+<ExpressionTtoS>12.489/X</ExpressionTtoS>
+<AcceptableSourceUnits>Deg</AcceptableSourceUnits>
+<AcceptableTargetUnits>mm</AcceptableTargetUnits>
+<SourceMinIsTargetMax>false</SourceMinIsTargetMax>
+</JEPQuantityConverter>
+"""
+
 import json
 import math
 import re
@@ -233,29 +249,3 @@ class DcmSmartLookupTable(StandardReadable):
             iter_num += 1
 
         return (lower[0] + upper[0]) / 2.0
-
-
-if __name__ == "__main__":
-    ## Test evaluator
-    config_root = "/scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config"  # noqa: E501
-    filename = f"{config_root}/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml"
-    # filename = "lookuptable_harmonic1.txt"
-    # beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"  # noqa: E501
-    # filename = beamline_lookuptable_dir + "Si111/lookuptable_harmonic9.txt"
-    # filename = "/tmp/fits.txt"
-    # dataframe = load_fit_results(filename)
-
-    # print(dataframe)
-    converter = BraggAngleToDistancePerpConverter.create_from_file(filename)
-    for angle in range(10, 20):
-        distance = converter.bragg_angle_degrees_to_distance(angle)
-        print(f"for angle {angle} there is distance: {distance}")
-
-    # /scratch/gda/9.master-6March-test-newconfig/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/Si111/Deg_dcm_perp_mm_converter.xml  # noqa: E501
-    # <JEPQuantityConverter>
-    # <ExpressionStoT>12.82991823/cos(X/(180/(4.0*atan(1.0))))-0.33493688</ExpressionStoT>
-    # <ExpressionTtoS>12.489/X</ExpressionTtoS>
-    # <AcceptableSourceUnits>Deg</AcceptableSourceUnits>
-    # <AcceptableTargetUnits>mm</AcceptableTargetUnits>
-    # <SourceMinIsTargetMax>false</SourceMinIsTargetMax>
-    # </JEPQuantityConverter>

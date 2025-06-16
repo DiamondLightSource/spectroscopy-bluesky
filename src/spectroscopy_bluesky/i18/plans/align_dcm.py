@@ -1,16 +1,14 @@
 """
-first, we lookup table - calibrate the DCM
-- measure foil, etc Fe, Mg, then absorption spectrum
-then the xanes absorption - then derivative, argmax of the first derivative
-then Bragg offset is adjusted to match the calibrated value
-
-- for 10-15 points inside the energy range for this element
-we scan the gap fo the insertion devise, looking for the maximum
-then quadratic interpolation, written into the file,
-then GDA probably some interpolation
-
-- todo read previous values using the daq-config-server
-- todo take into account a specific harmonic
+1. Lookup table: calibrate the DCM.
+2. Measure foil (e.g., Fe, Mg), then record absorption spectrum.
+3. Perform XANES absorption scan; compute first derivative and find argmax.
+4. Adjust Bragg offset to match calibrated value.
+5. For 10–15 points within the element's energy range:
+   - Scan the insertion device gap, searching for the maximum.
+   - Apply quadratic interpolation; write results to file.
+   - GDA performs further interpolation as needed.
+6. TODO: Read previous values from daq-config-server.
+7. TODO: Account for
 """
 
 import bluesky.plan_stubs as bps
@@ -72,6 +70,7 @@ def align_dcm(
         max_current = -np.inf
         max_idgap = None
 
+        # todo adjust dynamically
         for gap in idgap_range:
             yield from bps.mv(dcm.id_gap, gap)
             yield from bps.sleep(1)
