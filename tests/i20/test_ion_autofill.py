@@ -23,7 +23,7 @@ def test_get_gas_valve(gas_injector):
     # Test for each gas type
     for gas in GasToInject:
         valve = get_gas_valve(gas_injector, gas)
-        assert valve == getattr(gas_injector, f"{gas.value}_valve"), (
+        assert valve is gas_injector.gas_valves[gas], (
             f"Failed for {gas.value}"
         )
 
