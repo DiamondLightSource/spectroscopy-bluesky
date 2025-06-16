@@ -8,13 +8,13 @@ from spectroscopy_bluesky.i20.ion_autofill import (
     get_gas_valve,
 )
 
-test_gas_injector = MagicMock(spec=GasInjectionController)
+
 
 
 @pytest.fixture
 def gas_injector():
     """Fixture to provide a mock GasInjectionController."""
-    return test_gas_injector
+    return MagicMock(spec=GasInjectionController)
 
 
 # todo finish up the test
