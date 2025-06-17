@@ -1,9 +1,13 @@
 import enum
+from asyncio import sleep
 
 from ophyd_async.core import (
     StandardReadable,
 )
 from ophyd_async.epics.core import epics_signal_r, epics_signal_rw
+
+ionchamber_leak_wait_time = 10.0
+injection_equilibration_wait_time = 20
 
 
 class GasToInject(enum.Enum):
@@ -82,3 +86,67 @@ class GasInjectionController(StandardReadable):
 
     def get_chamber_valve(self, chamber: IonChamberToFill):
         return self.chambers[chamber]
+
+    async def inject_gas(
+        self,
+        target_pressure: float,
+        chamber: IonChamberToFill,
+        gas: GasToInject = GasToInject.ARGON,
+    ):
+        """
+
+        todo change this sleep logic part
+        yield from bps.sleep(injection_equilibration_wait_time)
+        """
+        chamber_valve = self.get_chamber_valve(chamber)
+
+        gas_valve = self.get_gas_valve(gas)
+        chamber_pressure = self.pressure_controller_2
+        await chamber_pressure.setpoint.set(target_pressure)
+        await gas_valve.set(ValveCommands.RESET.value)
+        await gas_valve.set(ValveCommands.OPEN.value)
+        await chamber_pressure.mode.set(PressureMode.PRESSURE_CONTROL.value)
+        # here we wait for the pressure to stabilize with monitor tool
+        await chamber_valve.set(ValveCommands.CLOSE.value)
+        await chamber_pressure.mode.set(PressureMode.HOLD.value)
+        await gas_valve.set(ValveCommands.CLOSE.value)
+
+    async def purge_chamber(self, chamber: IonChamberToFill):
+        chamber_valve = self.get_chamber_valve(chamber)
+        chamber_pressure = self.pressure_controller_2
+        await self.vacuum_pump.set(VacuumPumpCommands.ON.value)
+        await self.line_valve.set(ValveCommands.RESET.value)
+        await self.line_valve.set(ValveCommands.OPEN.value)
+        await chamber_valve.set(ValveCommands.RESET.value)
+        await chamber_valve.set(ValveCommands.OPEN.value)
+        base_pressure = (await chamber_pressure.readout.read())["value"]
+        await chamber_valve.set(ValveCommands.CLOSE.value)
+        # wait for leak check
+        await sleep(ionchamber_leak_wait_time)
+        check_pressure = (await chamber_pressure.readout.read())["value"]
+        print(
+            f"Base pressure in {chamber} is {base_pressure} mbar, "
+            f"check pressure after leak check is {check_pressure} mbar"
+        )
+        if check_pressure - base_pressure > 3:
+            print(f"WARNING, suspected leak in {chamber}, stopping here!!!")
+        await chamber_valve.set(ValveCommands.CLOSE.value)
+        await self.line_valve.set(ValveCommands.CLOSE.value)
+        await self.vacuum_pump.set(VacuumPumpCommands.OFF.value)
+
+    async def purge_line(self):
+        """
+        Purge the gas-supply line.
+        This is done by opening the line valve and waiting for the pressure to drop below a certain limit.
+        """
+        await self.vacuum_pump.set(VacuumPumpCommands.ON.value)
+        await self.line_valve.set(ValveCommands.RESET.value)
+        await self.line_valve.set(ValveCommands.OPEN.value)
+        line_pressure = (await self.pressure_controller_1.readout.read())["value"]
+        LIMIT_PRESSURE = 8.5
+        print("Purging the gas-supply line...")
+        while line_pressure > LIMIT_PRESSURE:
+            await sleep(1)
+            line_pressure = (await self.pressure_controller_1.readout.read())["value"]
+        await self.line_valve.set(ValveCommands.CLOSE.value)
+        await self.vacuum_pump.set(VacuumPumpCommands.OFF.value)
