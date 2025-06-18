@@ -17,7 +17,18 @@ def main(args: Sequence[str] | None = None) -> None:
         action="version",
         version=__version__,
     )
+    parser.add_argument(
+        "-g",
+        "--generate",
+    )
     parser.parse_args(args)
+
+    # todo fix this really
+    if args.__getattribute__("generate"):
+        print(
+            "This command is not implemented yet. "
+            "Please use the `spectroscopy_bluesky` package directly."
+        )
 
 
 if __name__ == "__main__":
