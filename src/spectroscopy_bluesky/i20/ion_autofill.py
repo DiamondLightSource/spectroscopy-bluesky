@@ -38,8 +38,8 @@ def ion_autofill(
     gather(gas_injector.purge_chamber(ion_chamber))
     gather(
         gas_injector.inject_gas(
-            target_pressure=target_pressure_mbar,
-            chamber=ion_chamber,
-            gas=gas_to_inject,
+            target_pressure_mbar,
+            ion_chamber,
+            gas_to_inject,
         )
     )
