@@ -1,0 +1,80 @@
+from typing import Annotated, Any
+
+import bluesky.preprocessors as bpp
+from bluesky.utils import MsgGenerator
+from dodal.common.maths import step_to_num
+from dodal.devices.linkam3 import Linkam3
+from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
+from ophyd_async.core import Device, StandardDetector, StandardFlyer
+from ophyd_async.fastcs.panda import HDFPanda, StaticSeqTableTriggerLogic
+from ophyd_async.plan_stubs import setup_ndstats_sum
+from pydantic import validate_call
+
+@attach_data_session_metadata_decorator()
+@validate_call(config={"arbitrary_types_allowed": True})
+def {{ plan_name }}(
+    panda: Annotated[
+        HDFPanda,
+        "{{ panda_description }}"
+    ] = {{ default_panda }},
+    stamped: Annotated[
+        StandardDetector,
+        "{{ stamped_description }}",
+    ] = {{ default_stamped_detector }},
+    detectors: Annotated[
+        set[StandardDetector], "{{ detectors_description }}"
+    ] = {{ default_detectors }},
+    metadata: dict[str, Any] | None = None,
+) -> MsgGenerator:
+    """
+    {{ description }}
+    Args:
+        {{ args }}
+    Returns:
+        MsgGenerator: Plan
+
+    Yields:
+        Iterator[MsgGenerator]: Bluesky messages
+    """
+    flyer = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
+    detectors = detectors | {stamped}
+    devices = detectors | {linkam, panda}
+
+    plan_args = {
+        "trajectory": trajectory,
+        "linkam": linkam.name,
+        "panda": panda.name,
+        "detector": stamped.name,
+        "detectors": {det.name for det in detectors},
+    }
+    _md = {
+        "detectors": {dev.name for dev in detectors},
+        "motors": {linkam.name},
+        "plan_args": plan_args,
+        "hints": {},
+    }
+    _md.update(metadata or {})
+
+    for device in devices:
+        yield from load_device(device, {{ plan_name | repr }})
+    yield from stamp_temp_pv(linkam, stamped)
+    for det in detectors:
+        yield from setup_ndstats_sum(det)
+
+    @bpp.stage_decorator(devices)
+    @bpp.run_decorator(md=_md)
+    def inner_plan():
+        start = trajectory.start
+        for segment in trajectory.path:
+            start, stop, num = (
+                start,
+                segment.stop,
+                segment.num
+                if segment.num is not None
+                else step_to_num(start, segment.stop, segment.step),
+            )
+            # TODO add what happens at each
+            start = segment.stop
+
+    rs_uid = yield from inner_plan()
+    return rs_uid
