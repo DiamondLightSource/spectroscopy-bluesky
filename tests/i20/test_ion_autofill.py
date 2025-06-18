@@ -9,8 +9,6 @@ from spectroscopy_bluesky.i20.ion_autofill import (
 )
 
 
-
-
 @pytest.fixture
 def gas_injector():
     """Fixture to provide a mock GasInjectionController."""
