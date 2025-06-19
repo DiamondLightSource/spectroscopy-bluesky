@@ -108,12 +108,9 @@ def generate():
         loader=FileSystemLoader(str(templates_dir)), undefined=DebugUndefined
     )
     template_source = env.loader.get_source(env, selected_template_file)[0]
-    print(template_source)
 
     parsed_content = env.parse(template_source)
-    print(parsed_content)
     vs = meta.find_undeclared_variables(parsed_content)
-    print(vs)
     template_vars = sorted(vs)
 
     user_inputs = collect_user_inputs(template_vars)
