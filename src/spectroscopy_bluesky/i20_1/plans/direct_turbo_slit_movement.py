@@ -117,7 +117,7 @@ def fly_sweep(
         width, start_pos, stop_pos, direction_of_sweep = calculate_stuff(
             start, stop, num
         )
-    
+
         direction_multiplier = -1.0
         if start < stop :
             direction_multiplier = 1.0
@@ -148,25 +148,25 @@ def fly_sweep(
 
         # kickoff motor move once pcomp has started
         yield from bps.kickoff(motor, wait=True)
-        
+
         yield from bps.complete_all(motor, panda_pcomp, wait=True)
 
     @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
     def inner_plan():
-    
+
         # prepare panda and hdf writer once, at start of scan
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
         yield from bps.kickoff(panda, wait=True)
-    
+
         for n in range(number_of_sweeps):
             even: bool = n % 2 == 0
             start2, stop2 = (start, stop) if even else (stop, start)
             print(f"Starting sweep {n} with start: {start2}, stop: {stop2}")
             yield from inner_squared_plan(start2, stop2)
             print(f"Completed sweep {n}")
-    
+
         yield from bps.complete_all(panda, wait=True)
 
     panda_hdf_info = TriggerInfo(
@@ -175,5 +175,5 @@ def fly_sweep(
             livetime=duration,
             deadtime=1e-5,
         )
-    
+
     yield from inner_plan()

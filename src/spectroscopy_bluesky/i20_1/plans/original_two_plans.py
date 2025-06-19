@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import bluesky.plan_stubs as bps
 import numpy as np
 from bluesky.plans import count
@@ -9,15 +10,12 @@ from bluesky.utils import MsgGenerator
 # from dodal.beamlines.i20_1 import turbo_slit
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 
-from dodal.common.visit import StaticVisitPathProvider
-from ophyd_async.fastcs.panda import HDFPanda
-
 path_provider = StaticPathProvider(
     UUIDFilenameProvider(),
     Path("/dls/i20-1/data/2023/cm33897-5/bluesky"),
 )
 
-panda = HDFpanda(f"BL20J-EA-panda-02:", path_provider=path_provider, name="panda")
+panda = HDFpanda("BL20J-EA-panda-02:", path_provider=path_provider, name="panda")
 
 
 def continuous_movement(
