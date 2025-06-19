@@ -56,12 +56,8 @@ class BraggAngleToDistancePerpConverter:
     def distance_mm_to_bragg_angle_degrees(self, distance: float) -> float:
         return self.constant_inverse / distance
 
-    # todo also add write to file
     @staticmethod
-    def create_from_file(path: Path) -> "BraggAngleToDistancePerpConverter":
-        with open(path) as f:
-            content = f.read()
-
+    def create_from_string(content: str) -> "BraggAngleToDistancePerpConverter":
         # Extract constants from ExpressionStoT
         sto_t_match = re.search(
             r"<ExpressionStoT>(\d+\.\d+)/cos\(X/.*?\)-(\d+\.\d+)</ExpressionStoT>",
@@ -86,6 +82,11 @@ class BraggAngleToDistancePerpConverter:
         return BraggAngleToDistancePerpConverter(
             constant_top, constant_subtract, constant_inverse
         )
+
+    def serialize_to_xml_string(self) -> str:
+        expr_stot = f"<ExpressionStoT>{self.constant_top}/cos(X/pi)-{self.constant_subtract}</ExpressionStoT>"  # noqa: E501
+        expr_ttos = f"<ExpressionTtoS>{self.constant_inverse}/X</ExpressionTtoS>"
+        return f"{expr_stot}\n{expr_ttos}"
 
 
 class DcmSmartLookupTable(StandardReadable):
