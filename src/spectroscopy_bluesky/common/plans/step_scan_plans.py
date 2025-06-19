@@ -1,13 +1,11 @@
 from collections.abc import Mapping
-from typing import Any, List, Optional
+from typing import Any
 
 import bluesky.plans as bp
 from bluesky.protocols import Readable
 from bluesky.utils import MsgGenerator
-from ophyd_async.epics.motor import Motor
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
-
-
+from ophyd_async.epics.motor import Motor
 
 """
 Dictionary of scan arguments from motor scan_args (start, stop, steps)
@@ -24,10 +22,10 @@ def make_args(motor, scan_args, prefix=""):
 
 @attach_data_session_metadata_decorator()
 def step_scan(
-    detectors: List[Readable],
+    detectors: list[Readable],
     motor: Motor,
-    scan_args: List[object],
-    metadata: Optional[Mapping[str, Any]] = None,
+    scan_args: list[object],
+    metadata: Mapping[str, Any] | None = None,
 ) -> MsgGenerator:
     """
     Scan wrapping `bp.scan`
@@ -54,13 +52,13 @@ def step_scan(
 
 @attach_data_session_metadata_decorator()
 def grid_scan(
-    detectors: List[Readable],
+    detectors: list[Readable],
     motor1: Motor,
-    scan_args1: List[object],
+    scan_args1: list[object],
     motor2: Motor,
-    scan_args2: List[object],
-    metadata: Optional[Mapping[str, Any]] = None,
-    snake_axes: Optional[bool] = None,
+    scan_args2: list[object],
+    metadata: Mapping[str, Any] | None = None,
+    snake_axes: bool | None = None,
 ) -> MsgGenerator:
     """
     Scan wrapping `bp.grid_scan'
