@@ -20,6 +20,7 @@ def make_args(motor, scan_args, prefix=""):
         "steps" + prefix: int(scan_args[2]),
     }
 
+
 @attach_data_session_metadata_decorator()
 def step_scan(
     detectors: list[Readable],
@@ -49,6 +50,7 @@ def step_scan(
         **(metadata or {}),
     }
     yield from bp.scan([*detectors], *args.values(), md=_md_)
+
 
 @attach_data_session_metadata_decorator()
 def grid_scan(

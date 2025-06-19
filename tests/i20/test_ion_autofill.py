@@ -2,13 +2,13 @@ from unittest.mock import MagicMock
 
 import pytest
 from bluesky import RunEngine
-
-from spectroscopy_bluesky.i20.devices.gas_rig import (
+from dodal.i20.devices.gas_rig import (
     GasInjectionController,
+    GasToInject,
     IonChamberToFill,
 )
+
 from spectroscopy_bluesky.i20.ion_autofill import (
-    GasToInject,
     ion_autofill,
 )
 
