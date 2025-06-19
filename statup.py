@@ -7,4 +7,4 @@ from spectroscopy_bluesky.i20_1.plans.direct_turbo_slit_movement import (
 )
 
 RE = RunEngine()
-RE(ensure_connected(turbo_slit(),panda))
+RE(ensure_connected(turbo_slit(), panda))

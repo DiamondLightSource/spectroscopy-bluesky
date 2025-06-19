@@ -108,9 +108,8 @@ def fly_sweep(
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 5,
-    runup: float = 0.0
+    runup: float = 0.0,
 ) -> MsgGenerator:
-
     panda_pcomp = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
 
     def inner_squared_plan(start: float | int, stop: float | int):
@@ -119,13 +118,13 @@ def fly_sweep(
         )
 
         direction_multiplier = -1.0
-        if start < stop :
+        if start < stop:
             direction_multiplier = 1.0
 
         motor_info = FlyMotorInfo(
             # include extra runup distance on start and end positions
-            start_position=start_pos-direction_multiplier*runup,
-            end_position=stop_pos+direction_multiplier*runup,
+            start_position=start_pos - direction_multiplier * runup,
+            end_position=stop_pos + direction_multiplier * runup,
             time_for_move=num * duration,
         )
 
@@ -155,7 +154,6 @@ def fly_sweep(
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
     def inner_plan():
-
         # prepare panda and hdf writer once, at start of scan
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
         yield from bps.kickoff(panda, wait=True)
@@ -170,10 +168,10 @@ def fly_sweep(
         yield from bps.complete_all(panda, wait=True)
 
     panda_hdf_info = TriggerInfo(
-            number_of_events=num*number_of_sweeps,
-            trigger=DetectorTrigger.CONSTANT_GATE,
-            livetime=duration,
-            deadtime=1e-5,
-        )
+        number_of_events=num * number_of_sweeps,
+        trigger=DetectorTrigger.CONSTANT_GATE,
+        livetime=duration,
+        deadtime=1e-5,
+    )
 
     yield from inner_plan()

@@ -1,5 +1,3 @@
-import matplotlib.pyplot as plt
-import numpy as np
 from bluesky.callbacks.core import CollectThenCompute
 from scipy.optimize import curve_fit
 
@@ -109,71 +107,3 @@ class FitCurvesMaxValue(FitCurves):
         # Find the peak value
         peak_index = yvals.index(max(yvals))
         return [[xvals[peak_index]], None]
-
-
-# Return value from quadratic curve : y = a + b*x * c*(x**2)
-def quadratic(x, a, b, c):
-    return a + b * x + c * (x**2)
-
-
-def fit_quadratic_curve(
-    data_results,
-    show_plot=False,
-    bounds=None,
-    default_bounds=100,
-    trial_quadratic=quadratic,
-):
-    """
-        Fit quadratic curve to a set of x,y values; return the fit parameters and covariance matrix
-
-    :param data_results: dictionary containing data to be fitted { xval1:yval1, xval2:yval2 ...}
-    :param show_plot: optional - show fit results and original data on plot (default = False)
-    :param bounds:  optional tuple containing bounds for each parameter of the trial_quadratic function e.g. ( (0,0,0), (10,10,10))
-    :param trial_quadratic : optional quadratic function to be used for fitting (default = 'quadratic')
-    :return: fit params, covariance matrix
-    """
-    ### All done - now extract undulator value for peak signal at each Bragg angle
-
-    #    if xvals is None or yvals is None :
-    print(data_results.keys(), data_results.values())
-    y_vals = list(data_results.values())
-    x_vals = list(data_results.keys())
-
-    # print("Curve x : {}".format(x_vals))
-    # print("Curve y : {}".format(y_vals))
-    upper_bound = [default_bounds] * 3
-    lower_bound = [-default_bounds] * 3
-    if bounds is not None:
-        lower_bound = list(bounds[0])
-        upper_bound = list(bounds[1])
-
-    bounds = (tuple(lower_bound), tuple(upper_bound))
-    param, cov = curve_fit(trial_quadratic, x_vals, y_vals, bounds=bounds)
-    print(f"Fit params (quadratic) : {param}")
-
-    # change quadratic component of bounds to force linear fit
-    lower_bound[-1] = -1e-12
-    upper_bound[-1] = 1e-12
-    bounds_linear_fit = (tuple(lower_bound), tuple(upper_bound))
-    params_linear, cov = curve_fit(
-        trial_quadratic, x_vals, y_vals, bounds=bounds_linear_fit
-    )
-    print(f"Fit params (linear) : {params_linear}")
-
-    if show_plot:
-        # Make arrays with x-y coords of fitted function profile
-        xvals_func = np.arange(min(x_vals), max(x_vals), 0.05)
-        yvals_func = trial_quadratic(xvals_func, *param)
-
-        plt.figure("Curve fit").clear()
-        plt.plot(x_vals, y_vals, label="values", marker="x")
-
-        plt.plot(xvals_func, yvals_func, label="best fit (quadratic)")
-
-        yvals_linear = trial_quadratic(xvals_func, *params_linear)
-        plt.plot(xvals_func, yvals_linear, label="best fit (linear)")
-
-        plt.legend()
-        plt.show()
-
-    return param, cov
