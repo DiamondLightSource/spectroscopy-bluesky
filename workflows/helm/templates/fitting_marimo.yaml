@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: marimo-uv
+  labels:
+    workflows.diamond.ac.uk/science-group: workflows-examples
+  annotations:
+    workflows.argoproj.io/title: marimo-uv
+    workflows.argoproj.io/description: |
+      This is an example demo-ing the marimo with uv setup
+spec:
+  entrypoint: workflow-entry
+  arguments:
+    parameters:
+      - name: start
+        value: "2"
+      - name: stop
+        value: "10"
+      - name: step
+        value: "5"
+  volumeClaimTemplates:
+    - metadata:
+        name: tmpdir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: local-path
+
+    - name: run
+      inputs:
+        parameters:
+          - name: start
+          - name: stop
+          - name: step
+      script:
+        image: ghcr.io/astral-sh/uv:bookworm
+        volumeMounts:
+          - name: tmpdir
+            mountPath: /tmp
+        command: [sh, -c]
+        source: |
+          echo "{{ .Files.Get "notebooks/curve_fitting.py" | b64enc }}" | base64 -d > /app/curve_fitting.py
+          uv run /app/curve_fitting.py -- {{inputs.parameters.start}} {{inputs.parameters.stop}} {{inputs.parameters.step}}
+        # following https://diamondlightsource.github.io/workflows/docs/how-tos/create-artifacts/
+        outputs:
+          artifacts:
+          - name: plot
+            path: /tmp/plot.png
+            archive:
+              none: { }
+
+    - name: workflow-entry
+      dag:
+        tasks:
+          - name: run
+            dependencies: []
+            template: run
+            arguments:
+              parameters:
+                - name: start
+                  value: "{{inputs.parameters.start}}"
+                - name: stop
+                  value: "{{inputs.parameters.stop}}"
+                - name: step
+                  value: "{{inputs.parameters.step}}
