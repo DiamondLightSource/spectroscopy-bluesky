@@ -1,8 +1,7 @@
 from asyncio import gather
 
 from dodal.common.types import MsgGenerator
-
-from spectroscopy_bluesky.i20.devices.gas_rig import (
+from dodal.i20.devices.gas_rig import (
     GasInjectionController,
     GasToInject,
     IonChamberToFill,
@@ -23,9 +22,6 @@ def ion_autofill(
     Usual usage:
     targetPressureAr = 35
     targetPressureHe = 1800
-    NOTE scientifically we do small portion of the heavy gas to measure flux
-    we use the light gas (Helium) to make sure that the pressure is positive so that
-    we do not get air leak into the ion chamber.
     Parameters:
     - gas_injector: GasInjectionController instance
     - target_pressure_mbar: Target pressure in mbar to set in the ion chamber
