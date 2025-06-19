@@ -28,7 +28,11 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+    "questionary",
     "tox-direct",
+    "typer",
+    "rich",
+    "jinja2",
     "types-mock",
 ]
 
