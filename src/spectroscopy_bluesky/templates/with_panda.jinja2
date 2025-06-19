@@ -26,16 +26,7 @@ def {{ plan_name }}(
     ] = {{ default_detectors }},
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
-    """
-    {{ description }}
-    Args:
-        {{ args }}
-    Returns:
-        MsgGenerator: Plan
-
-    Yields:
-        Iterator[MsgGenerator]: Bluesky messages
-    """
+    
     flyer = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
     detectors = detectors | {stamped}
     devices = detectors | {linkam, panda}
@@ -56,7 +47,7 @@ def {{ plan_name }}(
     _md.update(metadata or {})
 
     for device in devices:
-        yield from load_device(device, {{ plan_name | repr }})
+        yield from load_device(device, {{ plan_name }})
     yield from stamp_temp_pv(linkam, stamped)
     for det in detectors:
         yield from setup_ndstats_sum(det)
