@@ -1,16 +1,3 @@
-"""
-1. Lookup table: calibrate the DCM.
-2. Measure foil (e.g., Fe, Mg), then record absorption spectrum.
-3. Perform XANES absorption scan; compute first derivative and find argmax.
-4. Adjust Bragg offset to match calibrated value.
-5. For 10–15 points within the element's energy range:
-   - Scan the insertion device gap, searching for the maximum.
-   - Apply quadratic interpolation; write results to file.
-   - GDA performs further interpolation as needed.
-6. TODO: Read previous values from daq-config-server.
-7. TODO: Account for
-"""
-
 import bluesky.plan_stubs as bps
 import numpy as np
 import pandas as pd
@@ -19,6 +6,12 @@ from dodal.common.types import MsgGenerator
 from dodal.devices.diode import D7Diode, Diode
 from scipy.optimize import curve_fit
 
+from spectroscopy_bluesky.i18.plans.callback import FitCurves, FitCurvesMaxValue
+from spectroscopy_bluesky.i18.utils.stats import (
+    bounds_provider,
+    normalise_xvals,
+    trial_gaussian,
+)
 from spectroscopy_bluesky.i18.utils.workflow_starter import (
     Visit,
     call_quadratic_workflow,
@@ -28,12 +21,52 @@ DEFAULT_DCM: DCM = inject("dcm")
 DEFAULT_DIODE: Diode = inject("d7diode")
 
 
-def trial_gaussian(x, a, b, c):
-    return a * np.exp(-(((x - c) * b) ** 2))
+def get_curve_callback() -> FitCurves:
+    c = FitCurves()
+    c.fit_function = trial_gaussian  # type: ignore
+    c.set_transform_function(normalise_xvals)
+    # set transform function to make x values relative before fitting
+    c.set_bounds_provider(bounds_provider)
+
+    return c
+
+
+def get_default_max_callback() -> FitCurvesMaxValue:
+    c = FitCurvesMaxValue()
+    c.set_transform_function(normalise_xvals)
+    return c
+
+
+def get_gap_points(
+    bragg_angle: float,
+    fit_results: dict,
+    gap_range: float,
+    offset: float,
+    base_points: list[float],
+):
+    # Make new set of undulator gap values to be scanned...
+    # extract last two recorded bragg angle and gap value
+    angles = list(fit_results.keys())[-2:]
+    gaps = list(fit_results.values())[-2:]
+    gradient = (gaps[1] - gaps[0]) / (angles[1] - angles[0])
+    expected_peak = (bragg_angle - angles[-1]) * gradient + gaps[-1]
+    print(
+        f"angles = {angles}, gaps = {gaps}, expected peak gap value = {expected_peak}"
+    )
+    start_gap = expected_peak - gap_range * 0.5
+    print(f"start gap value = {start_gap}")
+
+    gap_points = base_points + start_gap + offset
+
+    print(f"Undulator values : {gap_points}")
+    return gap_points
 
 
 def align_dcm(
-    dcm=DEFAULT_DCM, diode: D7Diode = DEFAULT_DIODE, sim: bool = False
+    dcm=DEFAULT_DCM,
+    diode: D7Diode = DEFAULT_DIODE,
+    sim: bool = False,
+    use_last_peak: bool = False,
 ) -> MsgGenerator:
     """
     Calibrate the DCM by scanning Bragg and ID gap, fitting a Gaussian to diode current.
@@ -43,33 +76,32 @@ def align_dcm(
     bragg_step = 0.5
     bragg_num_steps = 14
 
-    # Dummy undulator mapping for demonstration (replace with real mapping if available)
-    def undulator_angle_to_gap_mapping(angle):
-        # Example: linear mapping, replace with real calibration
-        return 10 + 0.2 * angle
-
-    gap_start = undulator_angle_to_gap_mapping(bragg_start)
-    gap_end = undulator_angle_to_gap_mapping(bragg_start - bragg_step)
-    gap_range = 2.5 * (gap_end - gap_start)
-    gap_start = undulator_angle_to_gap_mapping(bragg_start) - 0.5 * gap_range
 
     bragg_range = np.linspace(
         bragg_start, bragg_start - bragg_step * (bragg_num_steps - 1), bragg_num_steps
     )
-    idgap_range = np.linspace(gap_start, gap_start + gap_range, 10)
 
     data = pd.DataFrame(columns=["bragg", "id_gap", "diode_current"])
-    min_idgap_dict = dict.fromkeys(bragg_range, idgap_range[0])
+    # min_idgap_dict = dict.fromkeys(bragg_range, idgap_range[0])
 
     peak_results = []
-    for angle in bragg_range:
+    # todo complete the first run
+    # gap start is current position of undulator gap
+    msg = yield from bps.read(dcm.gap)
+    start_gap = msg[dcm.name]["value"]
+    print(f"Current undulator gap position : {start_gap}")
+
+    fit_results = {}
+    for angle in bragg_range[1:]:
         yield from bps.mv(dcm.bragg, angle)
-        min_idgap = min_idgap_dict.get(angle, idgap_range[0])
         fit_idgaps = []
         fit_currents = []
         max_current = -np.inf
         max_idgap = None
 
+        idgap_range = get_gap_points(
+            angle, fit_results, gap_range, gap_offset, undulator_points
+        )
         # todo adjust dynamically
         for gap in idgap_range:
             yield from bps.mv(dcm.id_gap, gap)
