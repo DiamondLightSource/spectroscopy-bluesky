@@ -68,6 +68,7 @@ def main(
         is_eager=True,
     ),
 ):
+    """Spectroscopy CLI"""
     pass
 
 
@@ -132,7 +133,7 @@ def generate():
         )
     except Exception as e:
         typer.secho(f"❌ Validation failed: {e}", fg=typer.colors.RED)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     rendered = env.get_template(selected_template_file).render(**user_inputs)
 
@@ -144,7 +145,11 @@ def generate():
 
     typer.secho(f"✅ Plan generated at {output_path}", fg=typer.colors.GREEN)
     typer.secho(
-        "Now open 'docs/how-tos/bluesky_verbs.md' to preview how to build your plan further"
+        """
+        Now open
+        'docs/how-tos/bluesky_verbs.md'
+        to preview how to build your plan further
+        """
     )
 
 

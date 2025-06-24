@@ -45,7 +45,7 @@ dev = [
 ]
 
 [project.scripts]
-spectroscopy-bluesky = "spectroscopy_bluesky.__main__:main"
+spectroscopy-bluesky = "spectroscopy_bluesky.__main__:cli"
 
 [project.urls]
 GitHub = "https://github.com/DiamondLightSource/spectroscopy-bluesky"
