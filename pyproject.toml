@@ -12,7 +12,18 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 description = "Plans to use at spectroscopy beamlines at DLS"
-dependencies = ["bluesky", "ophyd", "ophyd_async", "dls-dodal", "pandas", "matplotlib", "databroker", "scipy"] 
+dependencies = [
+    "bluesky",
+    "ophyd",
+    "ophyd_async",
+    "pandas",
+    "matplotlib",
+    "databroker",
+    "scipy",
+    "questionary",
+    "typer",
+    "jinja2",
+]
 
 dynamic = ["version"]
 license.file = "LICENSE"
@@ -28,12 +39,13 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+
     "tox-direct",
     "types-mock",
 ]
 
 [project.scripts]
-spectroscopy-bluesky = "spectroscopy_bluesky.__main__:main"
+spectroscopy-bluesky = "spectroscopy_bluesky.__main__:cli"
 
 [project.urls]
 GitHub = "https://github.com/DiamondLightSource/spectroscopy-bluesky"
