@@ -1,0 +1,42 @@
+from typing import Annotated, Any
+
+import bluesky.plan_stubs as bps
+import bluesky.preprocessors as bpp
+from bluesky.utils import MsgGenerator
+from pydantic import validate_call
+
+
+@validate_call(config={"arbitrary_types_allowed": True})
+def {{ plan_name }}(
+    {{ motor_arg }}: Annotated[Any, "{{ motor_description }}"],
+    {{ detector_arg }}: Annotated[Any, "{{ detector_description }}"],
+    {{ metadata_arg }}: dict[str, Any] | None = None,
+) -> MsgGenerator:
+    """
+    {{ description }}
+
+    Args:
+        {{ motor_arg }}: {{ motor_description }}
+        {{ detector_arg }}: {{ detector_description }}
+        {{ metadata_arg }}: Optional metadata
+
+    Yields:
+        Bluesky Msgs
+    """
+    _md = {
+        "detectors": [{{ detector_arg }}.name],
+        "motors": [{{ motor_arg }}.name],
+        "plan_args": {
+            "motor": {{ motor_arg }}.name,
+            "detector": {{ detector_arg }}.name,
+        },
+        "hints": {},
+    }
+    _md.update({{ metadata_arg }} or {})
+
+    @bpp.run_decorator(md=_md)
+    def plan():
+        yield from bps.mv({{ motor_arg }}, 0.0)
+        yield from bps.trigger_and_read([{{ detector_arg }}])
+
+    return (yield from plan())
