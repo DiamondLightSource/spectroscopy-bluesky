@@ -62,7 +62,12 @@ class FitCurves(CollectThenCompute):
         det_name = self._start_doc["detectors"][0]
 
         xvals = [e["data"][inner_loop_motor] for e in self._events]
-        yvals = [e["data"][det_name] for e in self._events]
+        
+        def get_det_data_name(event) :
+            return [n for n in event["data"].keys() if n.startswith(det_name) ]
+        
+        det_data_name = get_det_data_name(self._events[0])[0]
+        yvals = [e["data"][det_data_name] for e in self._events]
         return xvals, yvals
 
     def set_transform_function(self, transform_function):
@@ -117,7 +122,8 @@ def quadratic(x, a, b, c):
 
 
 def fit_quadratic_curve(
-    data_results,
+    x_vals,
+    y_vals,
     show_plot=False,
     bounds=None,
     default_bounds=100,
@@ -126,18 +132,14 @@ def fit_quadratic_curve(
     """
         Fit quadratic curve to a set of x,y values; return the fit parameters and covariance matrix
 
-    :param data_results: dictionary containing data to be fitted { xval1:yval1, xval2:yval2 ...}
+    :param x_vals
+    :param y_vals
     :param show_plot: optional - show fit results and original data on plot (default = False)
     :param bounds:  optional tuple containing bounds for each parameter of the trial_quadratic function e.g. ( (0,0,0), (10,10,10))
     :param trial_quadratic : optional quadratic function to be used for fitting (default = 'quadratic')
     :return: fit params, covariance matrix
     """
-    ### All done - now extract undulator value for peak signal at each Bragg angle
 
-    #    if xvals is None or yvals is None :
-    print(data_results.keys(), data_results.values())
-    y_vals = list(data_results.values())
-    x_vals = list(data_results.keys())
 
     # print("Curve x : {}".format(x_vals))
     # print("Curve y : {}".format(y_vals))
