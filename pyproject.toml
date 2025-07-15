@@ -22,6 +22,7 @@ dependencies = [
     "scipy",
     "dls-dodal @ git+https://github.com/DiamondLightSource/dodal@i20_1_add_panda_and_motors",
     "typer",
+    "h5py",
 ]
 
 dynamic = ["version"]

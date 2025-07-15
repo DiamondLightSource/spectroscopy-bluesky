@@ -332,7 +332,7 @@ def trajectory_fly_scan(
     f.create_dataset("time", shape=(1, len(times)), data=times)
     f.create_dataset("positions", shape=(1, len(positions)), data=positions)
 
-    info = PmacTrajInfo(spec=spec)
+    info = PmacTrajInfo(spec=spec)  # type: ignore
 
     traj = PmacTrajectoryTriggerLogic(pmac)
     traj_flyer = StandardFlyer(traj)
@@ -396,7 +396,7 @@ def seq_table_test(
 
     positions = np.linspace(start / MRES, stop / MRES, num, dtype=int)
 
-    table = SeqTable()
+    table = SeqTable()  # type: ignore
 
     # Prepare motor info using trajectory scanning
     spec = fly(
@@ -441,7 +441,7 @@ def seq_table_test(
 
     seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
-    info = PmacTrajInfo(spec=spec)
+    info = PmacTrajInfo(spec=spec)  # type: ignore
 
     traj = PmacTrajectoryTriggerLogic(pmac)
     traj_flyer = StandardFlyer(traj)

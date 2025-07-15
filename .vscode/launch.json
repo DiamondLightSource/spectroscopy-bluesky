@@ -5,7 +5,7 @@
             "name": "debugger",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceRoot}/test.py",
+            "program": "${workspaceRoot}/seq_test.py",
             "args": [],
             "console": "integratedTerminal",
             "justMyCode": false
