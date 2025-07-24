@@ -39,13 +39,12 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
-
     "tox-direct",
     "types-mock",
 ]
 
 [project.scripts]
-spectroscopy-bluesky = "spectroscopy_bluesky.__main__:cli"
+spectroscopy-bluesky = "spectroscopy_bluesky.__main__:main"
 
 [project.urls]
 GitHub = "https://github.com/DiamondLightSource/spectroscopy-bluesky"

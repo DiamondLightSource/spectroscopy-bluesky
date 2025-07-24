@@ -23,8 +23,7 @@
                 "redhat.vscode-yaml",
                 "ryanluker.vscode-coverage-gutters",
                 "charliermarsh.ruff",
-                "ms-azuretools.vscode-docker",
-                "bierner.markdown-mermaid"
+                "ms-azuretools.vscode-docker"
             ]
         }
     },
