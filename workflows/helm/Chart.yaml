@@ -1,5 +1,0 @@
-apiVersion: v2
-name: examples
-description: A chart of example ClusterWorkflowTemplates
-type: application
-version: 0.1.0
