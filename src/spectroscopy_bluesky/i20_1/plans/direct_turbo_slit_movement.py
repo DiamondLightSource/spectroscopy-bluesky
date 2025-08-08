@@ -19,12 +19,11 @@ from ophyd_async.core import (
     TriggerInfo,
     wait_for_value,
 )
-from ophyd_async.epics.motor import FlyMotorInfo
+from ophyd_async.epics.motor import FlyMotorInfo, Motor
 from ophyd_async.epics.pmac import (
-    Pmac,
-    PmacMotor,
+    PmacIO,
     PmacTrajectoryTriggerLogic,
-    PmacTrajInfo,
+    PmacTriggerLogic,
 )
 from ophyd_async.fastcs.panda import (
     HDFPanda,
@@ -38,7 +37,7 @@ from ophyd_async.fastcs.panda import (
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import ensure_connected
-from scanspec.specs import Line, Repeat, fly
+from scanspec.specs import Fly, Line, Repeat
 
 PATH = "/dls/i20-1/data/2023/cm33897-5/bluesky/"
 
@@ -310,18 +309,19 @@ def trajectory_fly_scan(
 ) -> MsgGenerator:
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
-
-    pmac = Pmac(prefix="BL20J-MO-STEP-06", name="pmac")
-    motor = PmacMotor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    pmac = PmacIO(
+        prefix="BL20J-MO-STEP-06:", raw_motors=[motor], coord_nums=[3], name="pmac"
+    )
 
     yield from ensure_connected(pmac, motor)
 
-    spec = fly(
-        Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
-        duration,
+    spec = Fly(
+        float(duration)
+        @ (Repeat(number_of_sweeps, gap=False) * ~Line(motor, start, stop, num))
     )
 
-    times = spec.frames().midpoints["DURATION"]
+    times = spec.frames().duration
     positions = spec.frames().midpoints[motor]
     positions = [int(x / MRES) for x in positions]
 
@@ -332,10 +332,9 @@ def trajectory_fly_scan(
     f.create_dataset("time", shape=(1, len(times)), data=times)
     f.create_dataset("positions", shape=(1, len(positions)), data=positions)
 
-    info = PmacTrajInfo(spec=spec)  # type: ignore
-
-    traj = PmacTrajectoryTriggerLogic(pmac)
-    traj_flyer = StandardFlyer(traj)
+    trigger_logic = PmacTriggerLogic(spec=spec)
+    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
     @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
@@ -360,7 +359,7 @@ def trajectory_fly_scan(
             deadtime=1e-5,
         )
 
-        yield from bps.prepare(traj_flyer, info, wait=True)
+        yield from bps.prepare(pmac_trajectory_flyer, trigger_logic, wait=True)
         # prepare both pcomps
         yield from bps.prepare(panda_pcomp1, pcomp_info1, wait=True)
         yield from bps.prepare(panda_pcomp2, pcomp_info2, wait=True)
@@ -368,14 +367,14 @@ def trajectory_fly_scan(
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
 
         yield from bps.kickoff(panda, wait=True)
-        yield from bps.kickoff(traj_flyer, wait=True)
+        yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
-        yield from bps.complete_all(traj_flyer, panda, wait=True)
+        yield from bps.complete_all(pmac_trajectory_flyer, panda, wait=True)
 
     yield from inner_plan()
 
 
-def seq_table_test(
+def seq_table(
     start: float,
     stop: float,
     num: int,
@@ -385,8 +384,10 @@ def seq_table_test(
 ):
     # Defining the frlyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
-    pmac = Pmac(prefix="BL20J-MO-STEP-06", name="pmac")
-    motor = PmacMotor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    pmac = PmacIO(
+        prefix="BL20J-MO-STEP-06:", raw_motors=[motor], coord_nums=[3], name="pmac"
+    )
     yield from ensure_connected(pmac, motor)
 
     # Prepare Panda trigger info using sequencer table
@@ -399,12 +400,12 @@ def seq_table_test(
     table = SeqTable()  # type: ignore
 
     # Prepare motor info using trajectory scanning
-    spec = fly(
-        Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
-        duration,
+    spec = Fly(
+        float(duration)
+        @ (Repeat(number_of_sweeps, gap=False) * ~Line(motor, start, stop, num))
     )
 
-    times = spec.frames().midpoints["DURATION"]
+    times = spec.frames().duration
     positions = spec.frames().midpoints[motor]
     positions = [int(x / MRES) for x in positions]
 
@@ -441,10 +442,9 @@ def seq_table_test(
 
     seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
-    info = PmacTrajInfo(spec=spec)  # type: ignore
-
-    traj = PmacTrajectoryTriggerLogic(pmac)
-    traj_flyer = StandardFlyer(traj)
+    trigger_logic = PmacTriggerLogic(spec=spec)
+    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
     # Prepare Panda file writer trigger info
     panda_hdf_info = TriggerInfo(
@@ -459,7 +459,7 @@ def seq_table_test(
     @bpp.stage_decorator([panda, panda_seq])
     def inner_plan():
         # Prepare pmac with the trajectory
-        yield from bps.prepare(traj_flyer, info, wait=True)
+        yield from bps.prepare(pmac_trajectory_flyer, trigger_logic, wait=True)
         # prepare sequencer table
         yield from bps.prepare(panda_seq, seq_table_info, wait=True)
         # prepare panda and hdf writer once, at start of scan
@@ -468,8 +468,8 @@ def seq_table_test(
         # kickoff devices waiting for all of them
         yield from bps.kickoff(panda, wait=True)
         yield from bps.kickoff(panda_seq, wait=True)
-        yield from bps.kickoff(traj_flyer, wait=True)
+        yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
-        yield from bps.complete_all(traj_flyer, panda_seq, panda, wait=True)
+        yield from bps.complete_all(pmac_trajectory_flyer, panda_seq, panda, wait=True)
 
     yield from inner_plan()
