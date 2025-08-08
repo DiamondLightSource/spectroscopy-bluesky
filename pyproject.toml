@@ -15,12 +15,12 @@ description = "Plans to use at spectroscopy beamlines at DLS"
 dependencies = [
     "bluesky",
     "ophyd",
-    "ophyd_async @ git+https://github.com/bluesky/ophyd-async@pmac-trajectory",
+    "ophyd_async @ git+https://github.com/bluesky/ophyd-async@pmac_trajectory",
     "pandas",
     "matplotlib",
     "databroker",
     "scipy",
-    "dls-dodal @ git+https://github.com/DiamondLightSource/dodal@i20_1_add_panda_and_motors",
+    "dls-dodal",
     "typer",
     "h5py",
 ]
