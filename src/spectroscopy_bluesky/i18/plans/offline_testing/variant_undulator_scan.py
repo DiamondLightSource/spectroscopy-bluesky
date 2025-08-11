@@ -1,4 +1,6 @@
-# os.environ['EPICS_CA_SERVER_PORT'] = "6064"  # set the Epics port before other imports, otherwise wrong value is picked up (5054)
+# set the Epics port before other imports, otherwise wrong value is picked up (5054)
+# os.environ['EPICS_CA_SERVER_PORT'] = "6064"
+
 import asyncio
 import math
 import os
@@ -175,13 +177,13 @@ gap_range = 2.5 * (gap_end - gap_start)  # double, to make sure don't miss the p
 gap_start = undulator_gap_value(bragg_start) - 0.5 * gap_range
 
 print(
-    "Bragg angle range : start = %.4f, step = %.4f, num steps = %d"
-    % (bragg_start, bragg_step, bragg_num_steps)
+    f"Bragg angle range : start = {bragg_start:.4f}, step = {bragg_step:.4f}, "
+    f"num steps = {bragg_num_steps}"
 )
 print(
-    f"Gap start, range, end : {gap_start:.4f}, {gap_range:.4f}, {gap_start + gap_range:.4f}"
+    f"Gap start, range, end : {gap_start:.4f}, {gap_range:.4f}, "
+    f"{gap_start + gap_range:.4f}"
 )
-
 
 bec = BestEffortCallback()
 RE = RunEngine()

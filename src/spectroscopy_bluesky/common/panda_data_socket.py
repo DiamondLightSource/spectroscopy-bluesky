@@ -33,8 +33,8 @@ class DataSocket:
         def collect_safe():
             try:
                 self.collect_data()
-            except:
-                print("Caught exception")
+            except Exception as ex:
+                print(f"Caught exception : {ex}")
 
         t = Thread(target=collect_safe)
         t.start()
@@ -47,7 +47,8 @@ class DataSocket:
             data_string = data.decode()
             print(len(data_string), data)
             if len(data_string) > 0:
-                ## remove the final \n (received data ends with 1 newline, fields ends with 2)
+                ## remove the final '\n' (received data ends with 1 newline,
+                # fields ends with 2)
                 data_string = data_string[:-1]
 
                 # split on whitespace
@@ -64,12 +65,12 @@ class DataSocket:
         # read and store the field names, set the data start index.
         if "fields:" in self.all_data:
             ind = self.all_data.index("fields:") + 1
-            field_names = []
             while len(self.all_data[ind]) > 0:
                 self.data_field_names.append(self.all_data[ind].strip().split()[0])
                 ind += 1
 
-            # the start index of the data lines is after the empty line following the field names
+            # the start index of the data lines is after the
+            # empty line following the field names
             self.data_start_index = ind + 1
 
         # set the end index of the data
@@ -94,7 +95,8 @@ class DataSocket:
         num_frames = self.get_num_frames()
         if frame_index < 0 or frame_index >= num_frames:
             raise IndexError(
-                f"Invalid frame index {frame_index} - only index values 0...{num_frames - 1} are allowed"
+                f"Invalid frame index {frame_index} - only "
+                "index values 0...{num_frames - 1} are allowed"
             )
 
         frame_index = self.data_start_index + frame_index
