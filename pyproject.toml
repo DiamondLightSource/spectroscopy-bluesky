@@ -7,20 +7,21 @@ name = "spectroscopy-bluesky"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 description = "Plans to use at spectroscopy beamlines at DLS"
+
 dependencies = [
     "bluesky",
     "ophyd",
-    "ophyd_async @ git+https://github.com/bluesky/ophyd-async@pmac-trajectory",
+    "ophyd_async",
     "pandas",
     "matplotlib",
     "databroker",
     "scipy",
-    "dls-dodal @ git+https://github.com/DiamondLightSource/dodal@i20_1_add_panda_and_motors",
+    "dls-dodal",
     "typer",
     "h5py",
 ]
@@ -28,7 +29,7 @@ dependencies = [
 dynamic = ["version"]
 license.file = "LICENSE"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.optional-dependencies]
 dev = [
@@ -50,16 +51,16 @@ spectroscopy-bluesky = "spectroscopy_bluesky.__main__:main"
 GitHub = "https://github.com/DiamondLightSource/spectroscopy-bluesky"
 
 [[project.authors]] # Further authors may be added by duplicating this section
-email = "stanislaw.malinowski@diamond.ac.uk"
-name = "Stanislaw Malinowski"
+email = "iain.hall@diamond.ac.uk"
+name = "Iain Hall"
 
 
 [tool.setuptools_scm]
 version_file = "src/spectroscopy_bluesky/_version.py"
 
 [tool.pyright]
-typeCheckingMode = "standard"
-reportMissingImports = false  # Ignore missing stubs in imported modules
+typeCheckingMode = "strict"
+reportMissingImports = false # Ignore missing stubs in imported modules
 
 [tool.pytest.ini_options]
 # Run pytest with all our checkers, and don't spam us with massive tracebacks on error
@@ -107,6 +108,7 @@ lint.select = [
     "C4",  # flake8-comprehensions - https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
     "E",   # pycodestyle errors - https://docs.astral.sh/ruff/rules/#error-e
     "F",   # pyflakes rules - https://docs.astral.sh/ruff/rules/#pyflakes-f
+    "N",   # pep8-naming - https://docs.astral.sh/ruff/rules/#pep8-naming-n
     "W",   # pycodestyle warnings - https://docs.astral.sh/ruff/rules/#warning-w
     "I",   # isort - https://docs.astral.sh/ruff/rules/#isort-i
     "UP",  # pyupgrade - https://docs.astral.sh/ruff/rules/#pyupgrade-up
