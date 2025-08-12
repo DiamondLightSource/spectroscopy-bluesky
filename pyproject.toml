@@ -59,7 +59,7 @@ name = "Iain Hall"
 version_file = "src/spectroscopy_bluesky/_version.py"
 
 [tool.pyright]
-typeCheckingMode = "normal"
+typeCheckingMode = "standard"
 reportMissingImports = false # Ignore missing stubs in imported modules
 
 [tool.pytest.ini_options]
