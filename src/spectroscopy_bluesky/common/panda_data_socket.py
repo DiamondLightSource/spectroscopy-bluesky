@@ -11,13 +11,12 @@ See : https://pandablocks.github.io/PandABlocks-server/master/capture.html
 
 
 class DataSocket:
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.all_data = []
-        self.data_start_index = 0
-        self.data_end_index = 0
-        self.socket = None
+    def __init__(self, host: str, port: int):
+        self.host: str = host
+        self.port: int = port
+        self.all_data: list[str] = []
+        self.data_start_index: int = 0
+        self.data_end_index: int = 0
 
     def connect(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
