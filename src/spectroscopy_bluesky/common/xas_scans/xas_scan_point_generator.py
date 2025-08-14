@@ -5,8 +5,6 @@ from numpy.typing import NDArray
 
 from spectroscopy_bluesky.common.xas_scans import XasScanParameters
 
-#from .xas_scan_parameters import XasScanParameters
-
 """
 Class to generate Xas scan grid of (energy, time) values from
 settings in XasScanParameters object
@@ -261,5 +259,3 @@ def example():
     print("\n\n# Index, energy [eV], collection time [sec]")
     for i, p in enumerate(energies):
         print(i, p[0], p[1])
-
-#example()
