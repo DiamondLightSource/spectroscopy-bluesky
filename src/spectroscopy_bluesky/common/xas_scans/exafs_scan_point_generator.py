@@ -1,10 +1,15 @@
+import math
+
 import numpy as np
 from numpy.typing import NDArray
-import math
+
 from spectroscopy_bluesky.common.xas_scans import XasScanParameters
 
+#from .xas_scan_parameters import XasScanParameters
+
 """
-Class to generate Xas scan grid of (energy, time) values from settings in XasScanParameters object
+Class to generate Xas scan grid of (energy, time) values from
+settings in XasScanParameters object
 
 """
 
@@ -38,7 +43,7 @@ class XasScanPointGenerator:
             )
 
             # remove the points from original exafs energy and time lists
-            for i in range(num_energies_to_replace):
+            for _i in range(num_energies_to_replace):
                 exafs_energies.pop(0)
                 exafs_times.pop(0)
 
@@ -71,7 +76,9 @@ class XasScanPointGenerator:
         )
         return self.create_energy_time_array(points, self.params.preEdgeTime)
 
-    def create_energy_time_array(self, energies: list[float]|NDArray, time_value: float) -> NDArray:
+    def create_energy_time_array(
+        self, energies: list[float] | NDArray, time_value: float
+    ) -> NDArray:
         arr = np.zeros([len(energies), 2])
         arr[:, 0] = energies
         arr[:, 1] = time_value
@@ -97,10 +104,7 @@ class XasScanPointGenerator:
 
     def create_constant_step_exafs(self) -> NDArray:
         return self.create_const_step_region(
-            self.params.c,
-            self.params.finalEnergy,
-            self.params.exafsStep,
-            True
+            self.params.c, self.params.finalEnergy, self.params.exafsStep, True
         )
 
     def create_constant_kstep_exafs(self) -> list[float]:
@@ -146,8 +150,10 @@ class XasScanPointGenerator:
     def create_const_step_region(
         self, start: float, end: float, step: float, include_last_point: bool = False
     ) -> NDArray:
-        last_point = end + step if include_last_point else end
-        return np.arange(start, last_point, step)
+        values = np.arange(start, end, step)
+        if include_last_point and math.fabs(values[-1] - end) > 0.001:
+            values = np.append(values, end)
+        return values
 
     def calculateVariableStepRegion(
         self, aEnergy: float, bEnergy: float, preEdgeStep: float, edgeStep: float
@@ -195,7 +201,8 @@ class XasScanPointGenerator:
                 break
             i += 1
 
-        # i is the number of points in exafsEnergies that should replaced with the smoothed ones
+        # i is the number of points in exafsEnergies that should replaced
+        # with the smoothed ones
         return i, self.calculateVariableStepRegion(
             cEnergy, exafsEnergies[i], edgeStep, kStep
         )
@@ -220,15 +227,14 @@ class XasScanPointGenerator:
     def is_constant_exafs_time(self):
         return self.params.exafsTimeType.lower() == "constant time"
 
+
 def example():
     # Setup the parameters
     params = XasScanParameters("Fe", "K")
     params.set_from_element_edge()
-    params.set_abc_from_gaf()
-    params.adjust_a_energy()
     params.exafsTimeType = "variable time"
 
-    print("Parameters : {}".format(params))
+    print(f"Parameters : {params}")
 
     # Generate the energy grid values
     generator = XasScanPointGenerator(params)
@@ -239,7 +245,6 @@ def example():
     import matplotlib.pyplot as plt
 
     delta_e = energies[1:-1, 0] - energies[0:-2, 0]
-    point_num = np.arange(len(energies))
 
     fig, ax1 = plt.subplots()
     ax2 = ax1.twinx()
@@ -257,5 +262,4 @@ def example():
     for i, p in enumerate(energies):
         print(i, p[0], p[1])
 
-
-# example()
+#example()

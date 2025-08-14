@@ -1,8 +1,9 @@
-import xraydb as xraydb
 import math
 from dataclasses import dataclass
-from scipy.constants import electron_volt, angstrom, hbar, electron_mass
 from typing import cast
+
+import xraydb as xraydb
+from scipy.constants import angstrom, electron_mass, electron_volt, hbar
 
 """
 Parameters needed for calculating energy grid for Xas scan
@@ -40,24 +41,30 @@ class XasScanParameters:
     exafsTimeType: str = "Constant Time"  # 'Constant time' or 'variable time'
     abGafChoice: str = "Gaf1/Gaf2"
 
-    def lookup_edge_energy(self, edge_name: str|None = None) -> float:
+    def lookup_edge_energy(self, edge_name: str | None = None) -> float:
         if edge_name is None:
             edge_name = self.edge
         return cast(float, xraydb.xray_edge(self.element, edge_name, energy_only=True))
 
-    def lookup_core_hole(self, edge_name: str|None = None) -> float:
+    def lookup_core_hole(self, edge_name: str | None = None) -> float:
         if edge_name is None:
             edge_name = self.edge
         return cast(float, xraydb.core_width(self.element, edge_name))
 
     def set_from_element_edge(self):
-        """Set the initial and final energy to default values and lookup the edge and core hole
-        energies for the element and edge.
+        """* Set the initial and final energy to default values and lookup the
+        edge and core hole energies for the element and edge.
+        * Set the a, b, c region energies using the current gaf values and adjust
+        the 'a' energy to be a multiple of the pre-edge steps size.
         """
         self.edgeEnergy = self.lookup_edge_energy(self.edge)
         self.coreHole = self.lookup_core_hole(self.edge)
         self.finalEnergy = self.calculate_final_energy(self.edge)
         self.initialEnergy = self.edgeEnergy - 200
+
+        ##Set the
+        self.set_abc_from_gaf()
+        self.adjust_a_energy()
 
     def adjust_a_energy(self):
         """Adjust the 'a' energy to match the last energy in the pre-edge region
@@ -67,7 +74,8 @@ class XasScanParameters:
         self.a = self.initialEnergy + num_steps * self.preEdgeStep
 
     def calculate_final_energy(self, edge_name: str) -> float:
-        """Calculate the final energy position based on the edge energy and the edge type
+        """Calculate the final energy position based on the edge energy
+        and the edge type
 
         Args:
             edge_name (str): edge name (one of : K, L1, L2, L3, M1, M2, M3, M4, M5)
@@ -137,7 +145,8 @@ class XasScanParameters:
         self.c = c
 
     def check_abc(self):
-        """Set c energy to default value if it's currently zero (i.e. 2*edge energy - b energy)"""
+        """Set 'c' energy to default value if it's currently
+        zero (i.e. 2*edge energy - b energy)"""
         if self.c == 0:
             self.c = 2 * self.edgeEnergy - self.b
 
