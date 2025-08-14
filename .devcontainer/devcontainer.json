@@ -28,10 +28,8 @@
         }
     },
     "features": {
-        // Some default things like git config
-        "ghcr.io/devcontainers/features/common-utils:2": {
-            "upgradePackages": false
-        }
+        // add in eternal history and other bash features
+        "ghcr.io/diamondlightsource/devcontainer-features/bash-config:1": {}
     },
     // Create the config folder for the bash-config feature
     "initializeCommand": "mkdir -p ${localEnv:HOME}/.config/bash-config",

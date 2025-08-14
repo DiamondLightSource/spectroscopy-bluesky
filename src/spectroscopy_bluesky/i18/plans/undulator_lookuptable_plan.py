@@ -6,7 +6,11 @@ import numpy as np
 from bluesky.preprocessors import subs_decorator
 from bluesky.protocols import Movable, Readable
 
-from spectroscopy_bluesky.i18.plans.curve_fitting import FitCurves, FitCurvesMaxValue
+from spectroscopy_bluesky.i18.plans.curve_fitting import (
+    FitCurves,
+    FitCurvesMaxValue,
+    fit_quadratic_curve,
+)
 from spectroscopy_bluesky.i18.plans.lookup_tables import save_fit_results
 
 
@@ -108,8 +112,10 @@ def undulator_lookuptable_scan(
                 grad = (gaps[1] - gaps[0]) / (angles[1] - angles[0])
                 expected_peak = (bragg_angle - angles[-1]) * grad + gaps[-1]
                 print(
-                    f"angles = {angles}, gaps = {gaps}, expected peak gap value = {expected_peak}"
+                    f"angles = {angles}, gaps = {gaps}, "
+                    f"expected peak gap value = {expected_peak}"
                 )
+
                 start_gap = expected_peak - gap_range * 0.5
                 print(f"start gap value = {start_gap}")
         else:
@@ -126,11 +132,11 @@ def undulator_lookuptable_scan(
             curve_fit_callback = fit_curve_callback_maxval
 
         @subs_decorator(curve_fit_callback)
-        def processing_decorated_plan():
-            msg = yield from bsp.list_scan([detector], undulator_gap_device, gap_points)
+        def processing_decorated_plan(points):
+            msg = yield from bsp.list_scan([detector], undulator_gap_device, points)
             return msg
 
-        msg = yield from processing_decorated_plan()
+        msg = yield from processing_decorated_plan(gap_points)
 
         print(f"Fit results : {curve_fit_callback.results}")
 
@@ -140,7 +146,8 @@ def undulator_lookuptable_scan(
         last_peak_position = fit_results[bragg_angle]
 
         print(
-            f"Fitted peak position : bragg = {bragg_angle}, undulator gap = {last_peak_position}"
+            f"Fitted peak position : bragg = {bragg_angle}, "
+            f"undulator gap = {last_peak_position}"
         )
         bragg_angle += bragg_step
 
@@ -152,8 +159,6 @@ def undulator_lookuptable_scan(
 
     # save the fitted peak positions to Ascii file
     if output_file is not None:
-        best_gap_values = list(fit_results.values())
-        bragg_angles = list(fit_results.keys())
         save_fit_results(
             output_file, fit_results.keys(), fit_results.values(), fit_params
         )
