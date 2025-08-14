@@ -24,6 +24,7 @@ dependencies = [
     "dls-dodal",
     "typer",
     "h5py",
+    "xraydb"
 ]
 
 dynamic = ["version"]
