@@ -15,11 +15,13 @@ from spectroscopy_bluesky.i20_1.plans.direct_turbo_slit_movement import (
 # Typer definitions
 app = typer.Typer(help="CLI Interface for running scans")
 
-_start = typer.Option(help="Starting position of the scan", default=0.0)
+_start = typer.Option(help="Starting position/energy of the scan", default=0.0)
 
-_stop = typer.Option(help="Ending position of the scan", default=10.0)
+_stop = typer.Option(help="Ending position/energy of the scan", default=10.0)
 
 _num = typer.Option(help="Number of points of the scan", default=100)
+
+_step = typer.Option(help="Step size in position/energy", default=1)
 
 _duration = typer.Option(
     help="Duration of the acquisition starting on the rising edge of a trigger",
@@ -39,7 +41,7 @@ RE(ensure_connected(t, p))
 def fly_scan_non_linear(
     start: int = _start,
     stop: int = _stop,
-    num: int = _num,
+    step: float = _step,
     duration: float = _duration,
 ):
     """
@@ -51,7 +53,7 @@ def fly_scan_non_linear(
         seq_non_linear(
             ei=start,
             ef=stop,
-            de=num,
+            de=step,
             duration=duration,
             panda=p,
         )
