@@ -7,7 +7,8 @@ from ophyd_async.plan_stubs import ensure_connected
 
 from spectroscopy_bluesky.i20_1.plans.direct_turbo_slit_movement import (
     fly_sweep_both_ways,
-    seq_table_test,
+    seq_non_linear,
+    seq_table,
     trajectory_fly_scan,
 )
 
@@ -35,6 +36,29 @@ RE(ensure_connected(t, p))
 
 
 @app.command()
+def fly_scan_non_linear(
+    start: int = _start,
+    stop: int = _stop,
+    num: int = _num,
+    duration: float = _duration,
+):
+    """
+    Run an "energy" scan with constant speed on the motor and SeqTable.\n
+    Currently only supports one sequencer table with 4096 points.\n
+    This scan requires the `seq_table` design to be loaded in the Panda.
+    """
+    RE(
+        seq_non_linear(
+            ei=start,
+            ef=stop,
+            de=num,
+            duration=duration,
+            panda=p,
+        )
+    )
+
+
+@app.command()
 def fly_scan_seq_table(
     start: float = _start,
     stop: float = _stop,
@@ -49,7 +73,7 @@ def fly_scan_seq_table(
     This scan requires the `seq_table` design to be loaded in the Panda.
     """
     RE(
-        seq_table_test(
+        seq_table(
             start=start,
             stop=stop,
             num=num,
