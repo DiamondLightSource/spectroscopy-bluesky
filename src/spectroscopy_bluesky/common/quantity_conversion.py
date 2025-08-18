@@ -3,6 +3,7 @@ Collection of functions and constants to help perform conversion between quantit
 in various different units.
 e.g. convert energy to wavelength, energy to wavevector, Bragg angle to wavelength etc
 """
+
 import math
 from typing import TypeAlias
 
@@ -77,7 +78,7 @@ def crystal_spacing(lattice_parameter: float, miller_indices: list[int]) -> floa
 
 def bragg_angle_to_wavelength(
     lattice_spacing: float, angle_deg: ndarray_or_number
-) -> NDArray :
+) -> NDArray:
     """Convert from Bragg angle (degrees) to wavelength (Angstroms)
 
     Args:
@@ -107,6 +108,7 @@ def energy_to_bragg_angle(
     wavelength = ev_to_wavelength(energy_ev)
     return wavelength_to_bragg_angle(lattice_spacing, wavelength, return_radians=False)
 
+
 def bragg_angle_to_energy(
     lattice_spacing: float, bragg_angle_degrees: ndarray_or_number
 ) -> ndarray_or_number:
@@ -124,7 +126,9 @@ def bragg_angle_to_energy(
 
 
 def wavelength_to_bragg_angle(
-    lattice_spacing: float, wavelength_angstroms: ndarray_or_number, return_radians=False
+    lattice_spacing: float,
+    wavelength_angstroms: ndarray_or_number,
+    return_radians=False,
 ) -> NDArray:
     """Convert wavelength (Angstroms) to Bragg angle (radians, degrees)
 
