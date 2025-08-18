@@ -28,7 +28,7 @@ const_ev_to_angstrom: float = Planck * speed_of_light / (angstrom * elementary_c
 """ Conversion factor from energy in eV to wavelength in Angstroms"""
 
 
-def ev_to_wavelength(energy_ev: ndarray_or_number) -> float:
+def ev_to_wavelength(energy_ev: ndarray_or_number) -> ndarray_or_number:
     """Convert from energy (eV) to wavelength (Angstroms)
 
     Args:
@@ -109,7 +109,7 @@ def energy_to_bragg_angle(
 
 def bragg_angle_to_energy(
     lattice_spacing: float, bragg_angle_degrees: ndarray_or_number
-) -> NDArray:
+) -> ndarray_or_number:
     """Convert Bragg angle (degrees) to energy (ev)
 
     Args:
@@ -125,7 +125,7 @@ def bragg_angle_to_energy(
 
 def wavelength_to_bragg_angle(
     lattice_spacing: float, wavelength_angstroms: ndarray_or_number, return_radians=False
-) -> ndarray_or_number:
+) -> NDArray:
     """Convert wavelength (Angstroms) to Bragg angle (radians, degrees)
 
     Args:
