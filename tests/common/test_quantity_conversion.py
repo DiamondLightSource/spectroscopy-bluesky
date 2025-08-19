@@ -58,9 +58,9 @@ def test_ev_wavelength(energy, expected_wavelength):
 def test_bragg_energy(angle, expected_energy):
     energy = bragg_angle_to_energy(si_311_lattice_spacing, angle)
     assert energy == pytest.approx(expected_energy, 1e-6)
-    assert energy_to_bragg_angle(
-        si_311_lattice_spacing, energy
-        ) == pytest.approx(angle, 1e-8)
+    assert energy_to_bragg_angle(si_311_lattice_spacing, energy) == pytest.approx(
+        angle, 1e-8
+    )
 
 
 @pytest.mark.parametrize(

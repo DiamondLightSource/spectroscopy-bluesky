@@ -69,7 +69,7 @@ def crystal_spacing(lattice_parameter: float, miller_indices: list[int]) -> floa
     """
     if len(miller_indices) != 3:
         raise Exception(
-            "Need 3 values for the Miller indices to calculate lattice spacing!"
+            "Need 3 values for the Miller indices to calculate lattice spacing!",
         )
 
     denom = float(sum([i * i for i in miller_indices]))
@@ -77,7 +77,8 @@ def crystal_spacing(lattice_parameter: float, miller_indices: list[int]) -> floa
 
 
 def bragg_angle_to_wavelength(
-    lattice_spacing: float, angle_deg: ndarray_or_number
+    lattice_spacing: float,
+    angle_deg: ndarray_or_number,
 ) -> NDArray:
     """Convert from Bragg angle (degrees) to wavelength (Angstroms)
 
@@ -92,7 +93,9 @@ def bragg_angle_to_wavelength(
 
 
 def energy_to_bragg_angle(
-    lattice_spacing: float, energy_ev: ndarray_or_number, return_radians=False
+    lattice_spacing: float,
+    energy_ev: ndarray_or_number,
+    return_radians=False,
 ) -> NDArray:
     """Convert photon energy (eV) to Bragg angle
     (using :func:`ev_to_wavelength` and :func:`wavelength_to_bragg_angle`)
@@ -110,7 +113,8 @@ def energy_to_bragg_angle(
 
 
 def bragg_angle_to_energy(
-    lattice_spacing: float, bragg_angle_degrees: ndarray_or_number
+    lattice_spacing: float,
+    bragg_angle_degrees: ndarray_or_number,
 ) -> ndarray_or_number:
     """Convert Bragg angle (degrees) to energy (ev)
 
@@ -148,7 +152,7 @@ def wavelength_to_bragg_angle(
     if val > 1:
         raise Exception(
             f"Wavelength {wavelength_angstroms} Angstroms is too large for "
-            "lattice spacing {lattice_spacing/angstrom} Angstroms!"
+            "lattice spacing {lattice_spacing/angstrom} Angstroms!",
         )
 
     theta = np.asin(val)
