@@ -38,14 +38,15 @@ RE(ensure_connected(t, p))
 
 
 @app.command()
-def fly_scan_non_linear(
+def case_2(
     start: int = _start,
     stop: int = _stop,
     step: float = _step,
     duration: float = _duration,
 ):
     """
-    Run an "energy" scan with constant speed on the motor and SeqTable.\n
+    Run an "energy" scan with constant speed on the motor and SeqTable.
+    Steps are not linearly spaced. But time between then is always equal to 1us.\n
     Currently only supports one sequencer table with 4096 points.\n
     This scan requires the `seq_table` design to be loaded in the Panda.
     """
@@ -61,7 +62,7 @@ def fly_scan_non_linear(
 
 
 @app.command()
-def fly_scan_seq_table(
+def case_1(
     start: float = _start,
     stop: float = _stop,
     num: int = _num,
@@ -70,7 +71,7 @@ def fly_scan_seq_table(
 ):
     """
     Run a trajectory scan using the sequencer table as a trigger source
-    and a trajectory on the PMAC.\n
+    and a trajectory on the PMAC. Constant speed and step size.\n
     Currently only supports one sequencer table with 4096 points.\n
     This scan requires the `seq_table` design to be loaded in the Panda.
     """
@@ -87,7 +88,7 @@ def fly_scan_seq_table(
 
 
 @app.command()
-def fly_scan_trajectory(
+def case_1_pcomp(
     start: float = _start,
     stop: float = _stop,
     num: int = _num,
@@ -96,7 +97,7 @@ def fly_scan_trajectory(
 ):
     """
     Run a trajectory scan using the PCOMP block as trigger source
-    and a trajectory on the PMAC.\n
+    and a trajectory on the PMAC. Constant speed and step size.\n
     PCOMP sends a trigger based on the starting position and evenly spaces them.\n
     This scan requires the `pcomp_auto_reset` design to be loaded in the Panda.
     """
