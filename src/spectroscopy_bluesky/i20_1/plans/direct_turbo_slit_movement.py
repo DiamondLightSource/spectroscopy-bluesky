@@ -15,15 +15,15 @@ from dodal.common.coordination import inject
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 from ophyd_async.core import (
     DetectorTrigger,
+    FlyMotorInfo,
     StandardFlyer,
     TriggerInfo,
     wait_for_value,
 )
-from ophyd_async.epics.motor import FlyMotorInfo, Motor
+from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
     PmacIO,
     PmacTrajectoryTriggerLogic,
-    PmacTriggerLogic,
 )
 from ophyd_async.fastcs.panda import (
     HDFPanda,
@@ -329,7 +329,7 @@ def trajectory_fly_scan(
     f.create_dataset("time", shape=(1, len(times)), data=times)
     f.create_dataset("positions", shape=(1, len(positions)), data=positions)
 
-    trigger_logic = PmacTriggerLogic(spec=spec)
+    trigger_logic = spec
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
@@ -399,7 +399,7 @@ def seq_table(
     # Prepare motor info using trajectory scanning
     spec = Fly(
         float(duration)
-        @ (Repeat(number_of_sweeps, gap=False) * ~Line(motor, start, stop, num))
+        @ (Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num))
     )
 
     times = spec.frames().duration
@@ -439,7 +439,7 @@ def seq_table(
 
     seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
-    trigger_logic = PmacTriggerLogic(spec=spec)
+    trigger_logic = spec
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
@@ -546,7 +546,7 @@ def seq_non_linear(
 
     seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
-    trigger_logic = PmacTriggerLogic(spec=spec)
+    trigger_logic = spec
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
