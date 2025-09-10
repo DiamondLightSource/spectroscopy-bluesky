@@ -1,6 +1,6 @@
-print("Running 'prepfunctions.py'")
-
 import os
+
+print("Running 'prepfunctions.py'")
 
 
 def set_server_port(port=6064):

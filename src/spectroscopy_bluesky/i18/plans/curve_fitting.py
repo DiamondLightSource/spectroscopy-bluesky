@@ -69,7 +69,6 @@ class FitCurves(CollectThenCompute):
     def extract_data(self):
         """Extract the x and y values (i.e. position of motor being
         moved and detector readout) from the event documents"""
-
         motor_names = self.start_doc["motors"]
         inner_loop_motor = motor_names[len(motor_names) - 1]
         det_name = self.start_doc["detectors"][0]
@@ -90,7 +89,8 @@ class FitCurves(CollectThenCompute):
             A function to be applied to the x and y values before curve fitting
             i.e. xvals_to_fit, yvals_to_fit = transform_function(xvals, yvals)
 
-        :param transform_function: takes the xvalues, yvalues and returns new set of values
+        :param transform_function: takes the xvalues, yvalues and returns
+        new set of values
         :return:
         """
         self.transform_function = transform_function
@@ -144,13 +144,18 @@ def fit_quadratic_curve(
     default_bounds: float = 100.0,
 ):
     """
-        Fit quadratic curve to a set of x,y values; return the fit parameters and covariance matrix
+        Fit quadratic curve to a set of x,y values; return the fit parameters
+        and covariance matrix
 
-    :param x_vals
-    :param y_vals
-    :param show_plot: optional - show fit results and original data on plot (default = False)
-    :param bounds:  optional tuple containing bounds for each parameter of the trial_quadratic function e.g. ( (0,0,0), (10,10,10))
-    :param trial_quadratic : optional quadratic function to be used for fitting (default = 'quadratic')
+    :param data_results: dictionary containing data to be fitted
+        { xval1:yval1, xval2:yval2 ...}
+    :param show_plot: optional - show fit results and original data
+        on plot (default = False)
+    :param bounds:  optional tuple containing bounds for each parameter of the
+        trial_quadratic function e.g. ( (0,0,0), (10,10,10))
+    :param trial_quadratic : optional quadratic function to be used for fitting
+        (default = 'quadratic')
+
     :return: fit params, covariance matrix
     """
 

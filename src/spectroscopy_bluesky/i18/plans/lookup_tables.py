@@ -109,7 +109,9 @@ def load_lookuptable_curve(filename, interpolate=True, **kwargs):
 def save_fit_results(filename, bragg_angles, gap_values, fit_params=None):
     """
         Save results from running
-        :py:func:`spectroscopy_bluesky.i18.plans.undulator_lookuptable_scan` plan to Ascii file
+        :py:func:`spectroscopy_bluesky.i18.plans.undulator_lookuptable_scan`
+        plan to Ascii file
+
         The top of the file contains :
         <li> Two lines of header showing fit parameters (if fit_params is set)
         <li> One header line showing the column names ('Bragg' and 'ID gap')

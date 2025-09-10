@@ -13,10 +13,12 @@ from spectroscopy_bluesky.i18.plans.curve_fitting import (
     gaussian_bounds_provider,
     trial_gaussian,
 )
+
 from spectroscopy_bluesky.i18.plans.lookup_tables import (
     id_gap_lookup_table_column_names,
     load_lookuptable_curve,
 )
+
 
 fit_curve_callback_gaussian = FitCurves()
 fit_curve_callback_gaussian.fit_function = trial_gaussian
@@ -27,7 +29,6 @@ fit_curve_callback_gaussian.bounds_provider = gaussian_bounds_provider
 
 fit_curve_callback_maxval = FitCurvesMaxValue()
 #fit_curve_callback_maxval.set_transform_function(normalise_xvals)
-
 
 def calculate_gap_parameters(
     lookup_table_file: str,
@@ -178,6 +179,7 @@ def undulator_lookuptable_scan(
 
                 # start gap value to place expected peak position
                 # in middle of the gap scan range
+
                 start_gap = expected_peak - gap_range * 0.5
                 print(f"start gap value = {start_gap}")
         else:
@@ -216,6 +218,7 @@ def undulator_lookuptable_scan(
             f"Peak fit method : = {curve_fit_callback=}\n"
             f"Fitted peak position : bragg = {bragg_angle:.4f}, "
             f"undulator gap = {fit_result:.4f}"
+
         )
         if output_file is not None:
             with open(output_file, "a") as myfile:
