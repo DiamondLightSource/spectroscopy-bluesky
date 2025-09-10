@@ -74,7 +74,9 @@ def lookup_value(
     # return best x value
     return (lower[0] + upper[0]) / 2.0
 
+
 from scipy.interpolate import CubicSpline
+
 
 def load_lookuptable_curve(filename, interpolate=True, **kwargs):
     """Load undulator gap lookup table from Ascii file
@@ -86,15 +88,17 @@ def load_lookuptable_curve(filename, interpolate=True, **kwargs):
     undulator gap, else function is quadratic fit to the values.
 
     :return: function that returns undulator gap value for a given Bragg angle
-    
+
     """
     vals = load_ascii_lookuptable(filename, lines_to_skip=2)
-    
-    if interpolate :
+
+    if interpolate:
         values = sorted(load_ascii_lookuptable(filename))
-        return CubicSpline( [v[0] for v in values], [v[1] for v in values])
-    
-    params, cov = fit_quadratic_curve([v[0] for v in vals], [v[1] for v in vals], **kwargs)
+        return CubicSpline([v[0] for v in values], [v[1] for v in values])
+
+    params, cov = fit_quadratic_curve(
+        [v[0] for v in vals], [v[1] for v in vals], **kwargs
+    )
 
     def best_undulator_gap(angle):
         return quadratic(angle, *params)
@@ -140,7 +144,7 @@ def save_fit_results(filename, bragg_angles, gap_values, fit_params=None):
     return dataframe
 
 
-def load_fit_results(filename):
+def load_fit_results(filename, fit_quadratic=False):
     """
         Load fit results from Ascii file (as produced by :py:func:`save_fit_results`
     :param filename:
@@ -160,6 +164,11 @@ def load_fit_results(filename):
         if "Quadratic" in f.readline():
             fit_params_string = f.readline().replace("#", "")
             fit_params = json.loads(fit_params_string)
+
+    if fit_quadratic:
+        fit_params = fit_quadratic_curve(
+            dataframe[dataframe.columns[0]], dataframe[dataframe.columns[1]]
+        )
 
     return dataframe, fit_params
 
