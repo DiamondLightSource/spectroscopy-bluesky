@@ -8,8 +8,6 @@ import h5py
 import numpy as np
 from aioca import caput
 from bluesky.utils import MsgGenerator
-
-# from dodal.beamlines.i20_1 import panda, turbo_slit
 from dodal.beamlines.i20_1 import turbo_slit
 from dodal.common.coordination import inject
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
@@ -18,6 +16,7 @@ from ophyd_async.core import (
     FlyMotorInfo,
     StandardFlyer,
     TriggerInfo,
+    YamlSettingsProvider,
     wait_for_value,
 )
 from ophyd_async.epics.motor import Motor
@@ -36,7 +35,12 @@ from ophyd_async.fastcs.panda import (
     StaticSeqTableTriggerLogic,
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
-from ophyd_async.plan_stubs import ensure_connected
+from ophyd_async.plan_stubs import (
+    apply_panda_settings,
+    ensure_connected,
+    retrieve_settings,
+    store_settings,
+)
 from scanspec.specs import Fly, Line, Repeat
 
 PATH = "/dls/i20-1/data/2023/cm33897-5/bluesky/"
@@ -307,6 +311,9 @@ def trajectory_fly_scan(
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 5,
 ) -> MsgGenerator:
+    # Start the plan by loading the saved design for this scan
+    yield from plan_restore_settings(panda=panda, name="pcomp_auto_reset")
+
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
     motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
@@ -379,6 +386,9 @@ def seq_table(
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 3,
 ):
+    # Start the plan by loading the saved design for this scan
+    yield from plan_restore_settings(panda=panda, name="seq_table")
+
     # Defining the frlyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
     motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
@@ -473,6 +483,7 @@ def seq_table(
 
 
 def Si111_energies_to_Bragg(Ei, Ef, dE):
+    print(f"param\nEi = {Ei}, Ef = {Ef}, dE = {dE}\n")
     energies = np.arange(Ei, Ef + dE, dE)  # include Ef as last point in the array
     angles = np.degrees(np.arcsin(1977.59 / energies))
     return angles
@@ -485,6 +496,9 @@ def seq_non_linear(
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008)
 ):
+    # Start the plan by loading the saved design for this scan
+    yield from plan_restore_settings(panda=panda, name="seq_table")
+
     # Defining the frlyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
     motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
@@ -494,7 +508,6 @@ def seq_non_linear(
     yield from ensure_connected(pmac, motor)
     angle = Si111_energies_to_Bragg(ei, ef, de)
     energies = np.arange(ei, ef + de, de)
-    print(f"\n\nlen(angle) = {len(angle)}\n\n")
 
     table = SeqTable()  # type: ignore
 
@@ -536,7 +549,7 @@ def seq_non_linear(
             repeats=1,
             trigger=direction,
             position=p,
-            time1=1,  # int(0.001 / 1e-6),
+            time1=1,
             outa1=True,
             time2=1,
             outa2=False,
@@ -577,3 +590,15 @@ def seq_non_linear(
         yield from bps.complete_all(pmac_trajectory_flyer, panda_seq, panda, wait=True)
 
     yield from inner_plan()
+
+
+def plan_store_settings(panda: HDFPanda, name: str):
+    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/i20_1/layouts")
+    yield from store_settings(provider, name, panda)
+
+
+def plan_restore_settings(panda: HDFPanda, name: str):
+    print(f"\nrestoring {name} layout\n")
+    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/i20_1/layouts")
+    settings = yield from retrieve_settings(provider, name, panda)
+    yield from apply_panda_settings(settings)
