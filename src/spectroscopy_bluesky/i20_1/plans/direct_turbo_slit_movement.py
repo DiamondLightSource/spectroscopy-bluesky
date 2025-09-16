@@ -41,12 +41,11 @@ from ophyd_async.plan_stubs import (
     retrieve_settings,
     store_settings,
 )
-from scanspec.specs import Fly, Line, Repeat
+from scanspec.specs import Fly, Line, Product
 
 PATH = "/dls/i20-1/data/2023/cm33897-5/bluesky/"
 
 MRES = -1 / 10000
-# pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
 
 
 class _StaticPcompTriggerLogic(StaticPcompTriggerLogic):
@@ -408,8 +407,7 @@ def seq_table(
 
     # Prepare motor info using trajectory scanning
     spec = Fly(
-        float(duration)
-        @ (Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num))
+        float(duration) @ Product(number_of_sweeps, Line(motor, start, stop, num))
     )
 
     times = spec.frames().duration
