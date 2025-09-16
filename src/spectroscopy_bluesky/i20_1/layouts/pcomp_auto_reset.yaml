@@ -199,12 +199,12 @@ counter.8.step: 0.0
 counter.8.trig: ZERO
 counter.8.trig_delay: 0
 counter.8.trig_edge: Rising
-data.capture: true
-data.capture_mode: FOREVER
+data.capture: false
+data.capture_mode: FIRST_N
 data.create_directory: 0
-data.flush_period: 0.0
-data.hdf_directory: /dls/i20-1/data/2023/cm33897-5/bluesky
-data.hdf_file_name: i20-1-52723-panda.h5
+data.flush_period: 1.0
+data.hdf_directory: ''
+data.hdf_file_name: ''
 data.num_capture: 0
 div.1.divisor: 0.0
 div.1.enable: ZERO
@@ -598,7 +598,7 @@ outenc.4.qperiod_units: s
 outenc.4.val: ZERO
 outenc.4.z: ZERO
 outenc.4.z_delay: 0
-pcap.arm: true
+pcap.arm: false
 pcap.bits0_capture: 'No'
 pcap.bits0_dataset: ''
 pcap.bits1_capture: 'No'
