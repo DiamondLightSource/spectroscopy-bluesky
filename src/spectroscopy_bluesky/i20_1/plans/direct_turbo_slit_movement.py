@@ -41,7 +41,7 @@ from ophyd_async.plan_stubs import (
     retrieve_settings,
     store_settings,
 )
-from scanspec.specs import Fly, Line, Product
+from scanspec.specs import Fly, Line
 
 PATH = "/dls/i20-1/data/2023/cm33897-5/bluesky/"
 
@@ -309,9 +309,11 @@ def trajectory_fly_scan(
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 5,
+    restore: bool = False,
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
-    yield from plan_restore_settings(panda=panda, name="pcomp_auto_reset")
+    if restore:
+        yield from plan_restore_settings(panda=panda, name="pcomp_auto_reset")
 
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
@@ -384,9 +386,11 @@ def seq_table(
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 3,
+    restore: bool = False,
 ):
     # Start the plan by loading the saved design for this scan
-    yield from plan_restore_settings(panda=panda, name="seq_table")
+    if restore:
+        yield from plan_restore_settings(panda=panda, name="seq_table")
 
     # Defining the frlyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
@@ -406,9 +410,7 @@ def seq_table(
     table = SeqTable()  # type: ignore
 
     # Prepare motor info using trajectory scanning
-    spec = Fly(
-        float(duration) @ Product(number_of_sweeps, Line(motor, start, stop, num))
-    )
+    spec = Fly(duration @ (number_of_sweeps * Line(motor, start, stop, num)))
 
     times = spec.frames().duration
     positions = spec.frames().midpoints[motor]
@@ -493,9 +495,11 @@ def seq_non_linear(
     de: float,
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008)
+    restore: bool = False,
 ):
     # Start the plan by loading the saved design for this scan
-    yield from plan_restore_settings(panda=panda, name="seq_table")
+    if restore:
+        yield from plan_restore_settings(panda=panda, name="seq_table")
 
     # Defining the frlyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
@@ -549,8 +553,10 @@ def seq_non_linear(
             position=p,
             time1=1,
             outa1=True,
+            outb1=True,
             time2=1,
             outa2=False,
+            outb2=True,
         )
 
         counter += 1
