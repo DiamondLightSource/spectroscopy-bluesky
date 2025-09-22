@@ -46,7 +46,7 @@ def case_2(
 ):
     """
     Run an "energy" scan with constant speed on the motor and SeqTable.
-    Steps are not linearly spaced. But time between then is always equal to 1us.\n
+    Steps are not linearly spaced. Time in between triggers is always equal to 1us.\n
     Currently only supports one sequencer table with 4096 points.\n
     This scan requires the `seq_table` design to be loaded in the Panda.
     """
