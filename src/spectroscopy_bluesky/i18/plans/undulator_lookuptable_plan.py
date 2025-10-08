@@ -13,22 +13,21 @@ from spectroscopy_bluesky.i18.plans.curve_fitting import (
     gaussian_bounds_provider,
     trial_gaussian,
 )
-
 from spectroscopy_bluesky.i18.plans.lookup_tables import (
     id_gap_lookup_table_column_names,
     load_lookuptable_curve,
 )
 
-
 fit_curve_callback_gaussian = FitCurves()
 fit_curve_callback_gaussian.fit_function = trial_gaussian
-#fit_curve_callback_gaussian.set_transform_function(normalise_xvals)
+# fit_curve_callback_gaussian.set_transform_function(normalise_xvals)
 
 # set transform function to make x values relative before fitting
 fit_curve_callback_gaussian.bounds_provider = gaussian_bounds_provider
 
 fit_curve_callback_maxval = FitCurvesMaxValue()
-#fit_curve_callback_maxval.set_transform_function(normalise_xvals)
+# fit_curve_callback_maxval.set_transform_function(normalise_xvals)
+
 
 def calculate_gap_parameters(
     lookup_table_file: str,
@@ -99,7 +98,7 @@ def undulator_lookuptable_scan_autogap(
     bragg_num_steps: int,
     lookup_table_file: str,
     bragg_motor: Movable,
-    undulator_gap_motor, # needs to Movable and Readable
+    undulator_gap_motor,  # needs to Movable and Readable
     d7diode: Readable,
     gap_scan_step_size: float = 0.01,
     gap_range_multiplier: float = 2.5,
@@ -152,8 +151,10 @@ def undulator_lookuptable_scan(
     if output_file is not None:
         print(f"Writing data to file : {output_file}")
         with open(output_file, "w") as myfile:
-            myfile.write(f"# {id_gap_lookup_table_column_names[0]}, "
-                         f"{id_gap_lookup_table_column_names[1]}\n")
+            myfile.write(
+                f"# {id_gap_lookup_table_column_names[0]}, "
+                f"{id_gap_lookup_table_column_names[1]}\n"
+            )
 
     adjust_start_gap = True
 
@@ -161,7 +162,7 @@ def undulator_lookuptable_scan(
     yield from bps.mov(undulator_gap_device, initial_gap_start)
 
     # [bragg angle, gap value] for each angle in bragg_points
-    fit_results: list[list[float,float]] = []
+    fit_results: list[list[float, float]] = []
 
     for bragg_angle in bragg_points:
         print(f"Bragg angle : {bragg_angle}")
@@ -169,7 +170,6 @@ def undulator_lookuptable_scan(
 
         # Determine start position for next gap scan
         if use_last_peak and len(fit_results) > 0:
-
             # start at last peak position
             gap_start = fit_results[-1][1]
 
@@ -210,16 +210,14 @@ def undulator_lookuptable_scan(
         if fit_result < gap_abs_points[0] or fit_result > gap_abs_points[-1]:
             fit_result += gap_abs_points[0]
 
-        fit_results.append(
-            (bragg_angle, fit_result)
-        )
+        fit_results.append((bragg_angle, fit_result))
 
         print(
             f"Peak fit method : = {curve_fit_callback=}\n"
             f"Fitted peak position : bragg = {bragg_angle:.4f}, "
             f"undulator gap = {fit_result:.4f}"
-
         )
+
         if output_file is not None:
             with open(output_file, "a") as myfile:
                 myfile.write(f"{bragg_angle:.6f}\t{fit_result:.6f}\n")

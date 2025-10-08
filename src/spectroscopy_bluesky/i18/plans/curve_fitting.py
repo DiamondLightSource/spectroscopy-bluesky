@@ -29,16 +29,16 @@ class FitCurves(CollectThenCompute):
         self.results = []
 
         # A function to be applied to the x and y values before curve fitting
-        self.transform_function : Callable[
-            [list[float], list[float]], tuple[list[float], list[float]]
-        ] | None = None
+        self.transform_function: (
+            Callable[[list[float], list[float]], tuple[list[float], list[float]]] | None
+        ) = None
 
         self.bounds = None  # static bounds
 
         # function that provides bounds (min, max) based on list of x and y values
-        self.bounds_provider: Callable[
-            [list[float], list[float]], tuple[float, float]
-        ] | None = None
+        self.bounds_provider: (
+            Callable[[list[float], list[float]], tuple[float, float]] | None
+        ) = None
 
     def start(self, doc):
         self.results = []
@@ -198,7 +198,7 @@ def fit_quadratic_curve(
     return param, cov
 
 
-def trial_gaussian(x: float|NDArray, a: float, b: float, c: float) -> float:
+def trial_gaussian(x: float | NDArray, a: float, b: float, c: float) -> float:
     return a * np.exp(-(((x - c) * b) ** 2))
 
 
@@ -226,7 +226,9 @@ def normalise_xvals(xvals: list[float], yvals: list[float]) -> tuple[list[float]
     return [x - xvals[0] for x in xvals], yvals
 
 
-def max_value(x: list[float], height: float, peak_position: float, delta=0.01) -> list[float]:
+def max_value(
+    x: list[float], height: float, peak_position: float, delta=0.01
+) -> list[float]:
     delta = (max(x) - min(x)) / 1000
     return [height if abs(xval - peak_position) < delta else 0.0 for xval in x]
 

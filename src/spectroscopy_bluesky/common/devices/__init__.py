@@ -1,4 +1,4 @@
 from .readable_with_delay import ReadableWithDelay
-from .sim_gaussian import GaussianPatternGenerator, SimSignalDetector
+from .sim_signal_detector import FunctionPatternGenerator, SimSignalDetector
 
-__all__ = ["GaussianPatternGenerator", "SimSignalDetector", "ReadableWithDelay"]
+__all__ = ["FunctionPatternGenerator", "SimSignalDetector", "ReadableWithDelay"]

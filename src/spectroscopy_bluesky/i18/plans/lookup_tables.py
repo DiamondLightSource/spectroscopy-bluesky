@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 import pandas as pd
+from scipy.interpolate import CubicSpline
 
 from spectroscopy_bluesky.i18.plans.curve_fitting import fit_quadratic_curve, quadratic
 
@@ -73,9 +74,6 @@ def lookup_value(
 
     # return best x value
     return (lower[0] + upper[0]) / 2.0
-
-
-from scipy.interpolate import CubicSpline
 
 
 def load_lookuptable_curve(filename, interpolate=True, **kwargs):
@@ -168,20 +166,20 @@ def load_fit_results(filename, fit_quadratic=False):
             fit_params = json.loads(fit_params_string)
 
     if fit_quadratic:
-        fit_params = fit_quadratic_curve(
+        fit_params, _ = fit_quadratic_curve(
             dataframe[dataframe.columns[0]], dataframe[dataframe.columns[1]]
         )
 
     return dataframe, fit_params
 
 
-def generate_new_ascii_lookuptable(
+def generate_ascii_lookuptable(
     filename, fit_parameters, bragg_start, bragg_end, bragg_step
 ):
     step = abs(bragg_step) if bragg_start < bragg_end else -abs(bragg_step)
     bragg_vals = np.arange(bragg_start, bragg_end + bragg_step, step).tolist()
     bragg_vals.extend([bragg_end])  # add the final bragg angle value
-    gap_vals = [quadratic(v, *fit_parameters) for v in bragg_vals]
+    gap_vals = [quadratic(v, *fit_parameters.tolist()) for v in bragg_vals]
     header = "# bragg    idgap\n"
     with open(filename, "w") as f:
         f.write(header)
