@@ -5,7 +5,6 @@ from ophyd_async.epics.signal import epics_signal_r
 
 
 class ReadableWithDelay(StandardReadable):
-
     def __init__(
         self,
         pv_name: str,
@@ -16,7 +15,7 @@ class ReadableWithDelay(StandardReadable):
         self.delay_before_readout = 0.0
         super().__init__(name=name)
 
-    async def read(self) :
-        if self.delay_before_readout > 0 :
+    async def read(self):
+        if self.delay_before_readout > 0:
             await asyncio.sleep(self.delay_before_readout)
         return await super().read()

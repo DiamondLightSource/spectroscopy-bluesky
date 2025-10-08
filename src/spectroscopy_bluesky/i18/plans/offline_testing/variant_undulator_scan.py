@@ -58,6 +58,7 @@ bec.enable_plots()
 RE = RunEngine()
 RE.subscribe(bec)
 
+
 def make_motor_devices(bragg_pv, undulator_gap_pv):
     bragg_motor = None
     undulator_gap_motor = None
@@ -68,7 +69,7 @@ def make_motor_devices(bragg_pv, undulator_gap_pv):
     return bragg_motor, undulator_gap_motor
 
 
-bragg_motor, undulator_gap_motor, d7diode = None, None, None
+# bragg_motor, undulator_gap_motor, d7diode = None, None, None
 
 if use_epics_motors:
     bragg_motor, undulator_gap_motor = make_motor_devices(

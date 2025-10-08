@@ -24,7 +24,7 @@ class FitCurves(CollectThenCompute):
 
     def __init__(self):
         super().__init__()
-        self.fit_function: Callable[[*tuple[float]], float]
+        self.fit_function: Callable[..., float]
         self.fit_bounds = None
         self.results = []
 
@@ -37,7 +37,7 @@ class FitCurves(CollectThenCompute):
 
         # function that provides bounds (min, max) based on list of x and y values
         self.bounds_provider: (
-            Callable[[list[float], list[float]], tuple[float, float]] | None
+            Callable[[list[float], list[float]], tuple[list[float], list[float]]] | None
         ) = None
 
     def start(self, doc):
@@ -204,9 +204,9 @@ def trial_gaussian(x: float | NDArray, a: float, b: float, c: float) -> float:
 
 def gaussian_bounds_provider(
     xvals: list[float], yvals: list[float], peak_fit_fraction: float = 0.1
-) -> tuple[tuple[float], tuple[float]]:
-    bounds_a = 0, max(yvals) + 0.1
-    bounds_b = 0, 10000
+) -> tuple[list[float], list[float]]:
+    bounds_a = 0.0, max(yvals) + 0.1
+    bounds_b = 0.0, 10000.0
 
     # compute approximate centre position from weighted x position :
     weighted_centre = sum(np.array(xvals) * np.array(yvals)) / sum(yvals)
@@ -215,14 +215,16 @@ def gaussian_bounds_provider(
     centre_range = c_range * peak_fit_fraction
     bounds_c = weighted_centre - centre_range, weighted_centre + centre_range
 
-    return (bounds_a[0], bounds_b[0], bounds_c[0]), (
+    return [bounds_a[0], bounds_b[0], bounds_c[0]], [
         bounds_a[1],
         bounds_b[1],
         bounds_c[1],
-    )
+    ]
 
 
-def normalise_xvals(xvals: list[float], yvals: list[float]) -> tuple[list[float]]:
+def normalise_xvals(
+    xvals: list[float], yvals: list[float]
+) -> tuple[list[float], list[float]]:
     return [x - xvals[0] for x in xvals], yvals
 
 

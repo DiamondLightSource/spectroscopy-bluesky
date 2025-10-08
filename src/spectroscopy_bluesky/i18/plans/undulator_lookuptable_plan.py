@@ -58,7 +58,7 @@ def calculate_gap_parameters(
 
 
 def estimate_next_gap_peak(
-    fit_results: list[list[float, float]], bragg_angle: float
+    fit_results: list[list[float]], bragg_angle: float
 ) -> float:
     """Use linear extrapolation to find the next gap start position from last
     two fitted peak positions :
@@ -68,7 +68,7 @@ def estimate_next_gap_peak(
 
     (index 1 and 0 are last and previous fitted peak values respectively)
     Args:
-        fit_results (list[list[float, float]]): fitted [bragg angle, gap] values
+        fit_results (list[list[float]]): fitted [bragg angle, gap] values
         bragg_angle (float): bragg angle for gap value estimatation
 
     Returns:
@@ -138,7 +138,7 @@ def undulator_lookuptable_scan(
     gap_offset: float = 0,
     fit_parameters: list[float] | None = None,
     output_file: str | None = None,
-    curve_fit_callback: FitCurves | None = fit_curve_callback_gaussian,
+    curve_fit_callback: FitCurves = fit_curve_callback_gaussian,
     *args,
     **kwargs,
 ):
@@ -162,7 +162,7 @@ def undulator_lookuptable_scan(
     yield from bps.mov(undulator_gap_device, initial_gap_start)
 
     # [bragg angle, gap value] for each angle in bragg_points
-    fit_results: list[list[float, float]] = []
+    fit_results: list[list[float]] = []
 
     for bragg_angle in bragg_points:
         print(f"Bragg angle : {bragg_angle}")
@@ -210,7 +210,7 @@ def undulator_lookuptable_scan(
         if fit_result < gap_abs_points[0] or fit_result > gap_abs_points[-1]:
             fit_result += gap_abs_points[0]
 
-        fit_results.append((bragg_angle, fit_result))
+        fit_results.append([bragg_angle, fit_result])
 
         print(
             f"Peak fit method : = {curve_fit_callback=}\n"
