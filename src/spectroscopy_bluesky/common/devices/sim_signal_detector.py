@@ -24,7 +24,7 @@ class FunctionPatternGenerator:
         self._x = 0.0
 
         # function that takes float and optional parameters and returns a value
-        self.user_function: Callable[..., float|NDArray] = math.sin
+        self.user_function: Callable[..., float | NDArray] = math.sin
 
         # parameters to be passed to user_function
         self.function_params: list[float] = []
@@ -39,7 +39,7 @@ class FunctionPatternGenerator:
     def set_x(self, x: float):
         self._x = x
 
-    def generate_value(self, x_value: float) -> float|NDArray:
+    def generate_value(self, x_value: float) -> float | NDArray:
         """Generate value from `self.user_function`. Passes x_value
         as first parameter, followed by each parameter in
         `self.function_params` list.

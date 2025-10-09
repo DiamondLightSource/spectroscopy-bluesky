@@ -56,9 +56,7 @@ def calculate_gap_parameters(
     return float(gap_start), float(gap_range)
 
 
-def estimate_next_gap_peak(
-    fit_results: list[list[float]], bragg_angle: float
-) -> float:
+def estimate_next_gap_peak(fit_results: list[list[float]], bragg_angle: float) -> float:
     """Use linear extrapolation to find the next gap start position from last
     two fitted peak positions :
     using :

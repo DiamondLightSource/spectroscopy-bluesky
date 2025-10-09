@@ -24,7 +24,7 @@ class FitCurves(CollectThenCompute):
 
     def __init__(self):
         super().__init__()
-        self.fit_function: Callable[..., float|NDArray]
+        self.fit_function: Callable[..., float | NDArray]
         self.fit_bounds = None
         self.results = []
 
@@ -198,7 +198,7 @@ def fit_quadratic_curve(
     return param, cov
 
 
-def trial_gaussian(x: float | NDArray, a: float, b: float, c: float) -> float|NDArray:
+def trial_gaussian(x: float | NDArray, a: float, b: float, c: float) -> float | NDArray:
     return a * np.exp(-(((x - c) * b) ** 2))
 
 
