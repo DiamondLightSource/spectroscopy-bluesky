@@ -37,7 +37,7 @@ use_beamline_motors = False
 use_epics_motors = False
 use_epics_diode = False
 
-workstation=socket.gethostname().split(".")[0]
+workstation = socket.gethostname().split(".")[0]
 pv_prefix = f"ca://{workstation}-"
 
 motors = {
@@ -60,6 +60,7 @@ bec.enable_plots()
 RE = RunEngine()
 RE.subscribe(bec)
 
+
 def make_motor_devices(bragg_pv, undulator_gap_pv):
     bragg_motor = None
     undulator_gap_motor = None
@@ -68,6 +69,7 @@ def make_motor_devices(bragg_pv, undulator_gap_pv):
         undulator_gap_motor = Motor(undulator_gap_pv, name="undulator_gap_motor")
 
     return bragg_motor, undulator_gap_motor
+
 
 if use_epics_motors:
     bragg_motor, undulator_gap_motor = make_motor_devices(
