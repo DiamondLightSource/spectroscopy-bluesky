@@ -2,7 +2,6 @@ import math
 
 import bluesky.plan_stubs as bps
 import bluesky.plans as bsp
-import matplotlib
 import numpy as np
 from bluesky.preprocessors import subs_decorator
 from bluesky.protocols import Movable, Readable
@@ -192,8 +191,6 @@ def undulator_lookuptable_scan(
         gap_abs_points = gap_relative_points + gap_start + gap_offset
 
         print(f"Undulator values : {gap_abs_points}")
-
-        matplotlib.pyplot.show(block=False)
 
         @subs_decorator(curve_fit_callback)
         def processing_decorated_plan(points):

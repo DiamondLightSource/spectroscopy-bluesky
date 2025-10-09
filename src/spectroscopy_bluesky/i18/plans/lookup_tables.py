@@ -167,7 +167,8 @@ def load_fit_results(filename, fit_quadratic=False):
 
     if fit_quadratic:
         fit_params, _ = fit_quadratic_curve(
-            dataframe[dataframe.columns[0]], dataframe[dataframe.columns[1]]
+            dataframe[dataframe.columns[0]].to_list(),
+            dataframe[dataframe.columns[1]].to_list(),
         )
 
     return dataframe, fit_params

@@ -2,6 +2,9 @@ import math
 import random
 from collections.abc import Callable
 
+from numpy import ndarray
+from numpy.typing import NDArray
+
 from ophyd_async.core import (
     AsyncStatus,
     DeviceVector,
@@ -21,7 +24,7 @@ class FunctionPatternGenerator:
         self._x = 0.0
 
         # function that takes float and optional parameters and returns a value
-        self.user_function: Callable[..., float] = math.sin
+        self.user_function: Callable[..., float|NDArray] = math.sin
 
         # parameters to be passed to user_function
         self.function_params: list[float] = []
@@ -36,7 +39,7 @@ class FunctionPatternGenerator:
     def set_x(self, x: float):
         self._x = x
 
-    def generate_value(self, x_value: float):
+    def generate_value(self, x_value: float) -> float|NDArray:
         """Generate value from `self.user_function`. Passes x_value
         as first parameter, followed by each parameter in
         `self.function_params` list.
@@ -55,6 +58,10 @@ class FunctionPatternGenerator:
         if x_value is None:
             x_value = self._x
         val = self.generate_value(x_value)
+
+        if isinstance(val, ndarray):
+            val = val[0]
+
         if self.noise > 0:
             val += self.rnd_generator() * self.noise
         return val
