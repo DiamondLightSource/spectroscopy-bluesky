@@ -4,7 +4,6 @@ from collections.abc import Callable
 
 from numpy import ndarray
 from numpy.typing import NDArray
-
 from ophyd_async.core import (
     AsyncStatus,
     DeviceVector,
