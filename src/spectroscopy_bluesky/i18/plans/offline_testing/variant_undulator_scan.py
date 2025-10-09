@@ -1,4 +1,5 @@
 import pathlib
+import socket
 
 import bluesky.plan_stubs as bps
 from bluesky.callbacks.best_effort import BestEffortCallback
@@ -36,7 +37,8 @@ use_beamline_motors = False
 use_epics_motors = False
 use_epics_diode = False
 
-pv_prefix = "ca://ws416-"
+workstation=socket.gethostname().split(".")[0]
+pv_prefix = f"ca://{workstation}-"
 
 motors = {
     "bragg_pv_name": ["BL18I-MO-DCM-01:BRAGG", pv_prefix + "MO-SIM-01:M1"],
@@ -58,7 +60,6 @@ bec.enable_plots()
 RE = RunEngine()
 RE.subscribe(bec)
 
-
 def make_motor_devices(bragg_pv, undulator_gap_pv):
     bragg_motor = None
     undulator_gap_motor = None
@@ -68,16 +69,10 @@ def make_motor_devices(bragg_pv, undulator_gap_pv):
 
     return bragg_motor, undulator_gap_motor
 
-
-# bragg_motor, undulator_gap_motor, d7diode = None, None, None
-
 if use_epics_motors:
     bragg_motor, undulator_gap_motor = make_motor_devices(
         bragg_pv_name, undulator_gap_pv_name
     )
-    # use similated motor for testing on i20-1
-    # undulator_gap_motor = SimMotor(name="undulator_gap_motor", instant=True)
-    # RE(bps.mv(undulator_gap_motor.velocity, 10))
 else:
     bragg_motor = SimMotor(name="bragg_motor", instant=True)
     undulator_gap_motor = SimMotor(name="undulator_gap_motor", instant=True)
