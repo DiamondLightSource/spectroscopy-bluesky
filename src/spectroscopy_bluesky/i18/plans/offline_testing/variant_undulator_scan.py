@@ -1,229 +1,157 @@
-# set the Epics port before other imports, otherwise wrong value is picked up (5054)
-# os.environ['EPICS_CA_SERVER_PORT'] = "6064"
+import pathlib
+import socket
 
-import asyncio
-import math
-import os
-import time
-
-from bluesky import RunEngine
+import bluesky.plan_stubs as bps
 from bluesky.callbacks.best_effort import BestEffortCallback
-from databroker import Broker, Header
-from ophyd import EpicsMotor, EpicsSignalRO
-from ophyd.sim import SynAxis, SynGauss
+from bluesky.run_engine import RunEngine
+from ophyd_async.core import init_devices
 from ophyd_async.epics.motor import Motor
+from ophyd_async.sim import SimMotor
 
+from spectroscopy_bluesky.common.devices import (
+    FunctionPatternGenerator,
+    ReadableWithDelay,
+    SimSignalDetector,
+)
+from spectroscopy_bluesky.i18.plans.curve_fitting import (
+    FitCurvesMaxValue,
+    trial_gaussian,
+)
 from spectroscopy_bluesky.i18.plans.lookup_tables import (
-    fit_lookuptable_curve,
-    generate_new_ascii_lookuptable,
+    generate_ascii_lookuptable,
+    load_fit_results,
+    load_lookuptable_curve,
 )
 from spectroscopy_bluesky.i18.plans.undulator_lookuptable_plan import (
-    undulator_lookuptable_scan,
+    undulator_lookuptable_scan_autogap,
 )
 
-
-def save_scan_data_ascii_file(
-    header: Header,
-    file_path,
-    file_name_format="scan_%d.txt",
-    float_format="%.4f",
-    include_index=True,
-):
-    """
-    Save results from running bluesky plan to Ascii file
-    Columns are motor positions, followed by detector readouts
-    """
-    scan_id = header.start.scan_id
-    columns = (*header.start.motors, *header.start.detectors)
-    full_name = file_path + "/" + file_name_format % (scan_id)
-    print(f"Saving data to {full_name}\nColumns : {columns}")
-    header.table().to_csv(
-        full_name,
-        sep="\t",
-        columns=columns,
-        float_format=float_format,
-        index=include_index,
-    )
-
-
-class EpicsSignalROWithWait(EpicsSignalRO):
-    sleep_time_secs: float = 0.0
-
-    def read(self):
-        time.sleep(self.sleep_time_secs)
-        return super().read()
-
-
-class UndulatorCurve(SynGauss):
-    def __init__(self, *args, **kwargs):
-        self.peak_position_function = None
-        self.bragg_motor = None
-        super().__init__(*args, **kwargs)
-
-    def _compute(self):
-        if self.peak_position_function is not None and self.bragg_motor is not None:
-            # update the centre position using peak_position_function
-            #  with bragg_motor position as parameter
-            m = self.bragg_motor.position
-            self.center.put(self.peak_position_function(m))
-        return super()._compute()
-
-
-filename = "lookuptable_harmonic1.txt"
-beamline_lookuptable_dir = "/dls_sw/i18/software/gda_versions/gda_9_36/workspace_git/gda-diamond.git/configurations/i18-config/lookupTables/"  # noqa: E501
-# filename = beamline_lookuptable_dir + "Si111/lookuptable_harmonic9.txt"
-filename = beamline_lookuptable_dir + "Si111/lookuptable_harmonic7.txt"
+# lookup table in same directory as this script (offline_testing)
+beamline_lookuptable_dir = str(pathlib.Path(__file__).parent.resolve())
+filename = beamline_lookuptable_dir + "/Si111_harmonic7.txt"
 
 # load lookuptable from ascii file and fit quadratic curve
-undulator_gap_value = fit_lookuptable_curve(filename, show_plot=False)
+undulator_gap_value = load_lookuptable_curve(filename, show_plot=False)
 
-use_epics_motors = True
-beamline = True
+use_beamline_motors = False
+use_epics_motors = False
+use_epics_diode = False
 
-pv_prefix = "ws416-"
-bragg_pv_name = "BL18I-MO-DCM-01:BRAGG" if beamline else pv_prefix + "MO-SIM-01:M1"
-undulator_gap_pv_name = (
-    "SR18I-MO-SERVC-01:BLGAPMTR" if beamline else pv_prefix + "MO-SIM-01:M2"
-)
-energy_motor_pv_name = (
-    "BL18I-MO-DCM-01:ENERGY" if beamline else pv_prefix + "MO-SIM-01:M3"
-)
+workstation = socket.gethostname().split(".")[0]
+pv_prefix = f"ca://{workstation}-"
 
+motors = {
+    "bragg_pv_name": ["BL18I-MO-DCM-01:BRAGG", pv_prefix + "MO-SIM-01:M1"],
+    "undulator_gap_pv_name": ["SR18I-MO-SERVC-01:BLGAPMTR", pv_prefix + "MO-SIM-01:M2"],
+}
 
-def make_epics_motor(*args, **kwargs):
-    mot = EpicsMotor(*args, **kwargs)
-    # mot = Motor(*args, **kwargs)
-    if isinstance(mot, EpicsMotor):
-        mot.wait_for_connection()
-    elif isinstance(mot, Motor):
-        asyncio.run(mot.connect())
-
-    return mot
-
-
-# Setup the motors and detector for the environment
-if beamline:
-    os.environ["EPICS_CA_SERVER_PORT"] = "5064"
-
-    bragg_motor = make_epics_motor(bragg_pv_name, name="bragg_angle")
-    undulator_gap_motor = make_epics_motor(
-        undulator_gap_pv_name, name="undulator_gap_motor"
-    )
-    energy_motor = make_epics_motor(energy_motor_pv_name, name="energy_motor")
-    # d7diode = EpicsSignalRO("BL18I-DI-PHDGN-07:B:DIODE:I", name="d7diode")
-    d7diode = EpicsSignalROWithWait("BL18I-DI-PHDGN-07:B:DIODE:I", name="d7diode")
-    d7diode.sleep_time_secs = 0.5
-else:
-    if use_epics_motors:
-        bragg_motor = make_epics_motor(bragg_pv_name, name="bragg_angle")
-        undulator_gap_motor = make_epics_motor(
-            undulator_gap_pv_name, name="undulator_gap_motor"
-        )
-        # bragg_motor.wait_for_connection()
-        # undulator_gap_motor.wait_for_connection()
-        # make sure mres is set to small value
-        # to show the small changes in position (e.g. 0.001(
-    else:
-        bragg_motor = SynAxis(name="bragg_motor", labels={"motors"})
-        undulator_gap_motor = SynAxis(
-            name="undulator_gap_motor", labels={"motors"}, delay=0.01
-        )
-        undulator_gap_motor.precision = (
-            6  # decimal places of precision in readout value
-        )
-        undulator_gap_motor.pause = 0
-
-    # Setup diode to return gaussian intensity profile
-    d7diode = UndulatorCurve(
-        "d7diode", undulator_gap_motor, "undulator_gap_motor", center=0, Imax=1
-    )
-    # peak of the intensity depends on position of bragg_motor,
-    # and peak position from quadratic curve 'undulator_gap'
-    # i.e. peak_position = undulator_gap(bragg_motor.position)
-    d7diode.peak_position_function = undulator_gap_value
-    d7diode.bragg_motor = bragg_motor
-    d7diode.sigma.put(0.01)
-    d7diode.trigger()
-    d7diode.precision = 5
-
-# Bragg angle start position, stepsize, number of steps
-# bragg_start = 55
-# bragg_step = 0.3
-# bragg_num_steps = 20
-
-
-si_d_spacing = 5.4310205
-
-
-def bragg_to_energy(bragg_angle):
-    si_d_spacing * 2 * math.sin(bragg_angle * math.pi / 180.0)
-
-
-# bragg_start = 11.4; bragg_step = 0.3; bragg_num_steps = 7
-# bragg_start = 12.3; bragg_step = 0.3; bragg_num_steps = 4
-# 30jan2025
-# bragg_start = 14.2; bragg_step = 0.5; bragg_num_steps = 5
-bragg_start = 17.4
-bragg_step = 0.5
-bragg_num_steps = 14
-
-# Undulator range : lookup undulator values for Bragg start position and range
-gap_start = undulator_gap_value(bragg_start)
-gap_end = undulator_gap_value(bragg_start - bragg_step)
-# gap_range = 2.5 * (gap_end - gap_start)  # double, to make sure don't miss the peak
-gap_range = 2.5 * (gap_end - gap_start)  # double, to make sure don't miss the peak
-
-# gap range and gap offset could be dynamic (computed from scan during scan)
-gap_start = undulator_gap_value(bragg_start) - 0.5 * gap_range
+mot_index = 0 if use_beamline_motors else 1
+bragg_pv_name = motors["bragg_pv_name"][mot_index]
+undulator_gap_pv_name = motors["undulator_gap_pv_name"][mot_index]
 
 print(
-    f"Bragg angle range : start = {bragg_start:.4f}, step = {bragg_step:.4f}, "
-    f"num steps = {bragg_num_steps}"
-)
-print(
-    f"Gap start, range, end : {gap_start:.4f}, {gap_range:.4f}, "
-    f"{gap_start + gap_range:.4f}"
+    f"Epics motor PVs : bragg motor = {bragg_pv_name}, "
+    f"undulator gap = {undulator_gap_pv_name}"
 )
 
 bec = BestEffortCallback()
+bec.enable_plots()
+
 RE = RunEngine()
 RE.subscribe(bec)
 
-db = Broker.named("temp")
-RE.subscribe(db.insert)
+
+def make_motor_devices(bragg_pv, undulator_gap_pv):
+    bragg_motor = None
+    undulator_gap_motor = None
+    with init_devices():
+        bragg_motor = Motor(bragg_pv, name="bragg_motor")
+        undulator_gap_motor = Motor(undulator_gap_pv, name="undulator_gap_motor")
+
+    return bragg_motor, undulator_gap_motor
 
 
-# quadratic curve fit parameters are placed in this list
-fit_results = []
+if use_epics_motors:
+    bragg_motor, undulator_gap_motor = make_motor_devices(
+        bragg_pv_name, undulator_gap_pv_name
+    )
+else:
+    bragg_motor = SimMotor(name="bragg_motor", instant=True)
+    undulator_gap_motor = SimMotor(name="undulator_gap_motor", instant=True)
+    # set the velocities to reasonably high values
+    RE(bps.mv(bragg_motor.velocity, 10, undulator_gap_motor.velocity, 20))
 
-base_dir = "/dls/science/users/ewz97849/bluesky-install/i18-github/i18-bluesky/src/spectroscopy_bluesky.i18/plans/offline_testing/"  # noqa: E501
-# sys.exit()
+# Setup the diode
+if use_epics_diode:
+    with init_devices():
+        d7diode = ReadableWithDelay("BL18I-DI-PHDGN-07:B:DIODE:I", name="d7diode")
+    d7diode.delay_before_readout = 0.5
+else:
+    # Setup dummy detector to return gaussian intensity profile
+    gaussian_generator = FunctionPatternGenerator()
+    gaussian_generator.user_function = trial_gaussian
+    gaussian_generator.function_params = [1.0, 10, 0]
+    gaussian_generator.noise = 0.1
+
+    d7diode = SimSignalDetector(gaussian_generator.generate_point, name="d7diode")
+    d7diode.precision = 10
+
+    # update centre position of Gaussian when Bragg angle changes
+    def update_centre(bragg_angle):
+        gaussian_generator.function_params[2] = float(undulator_gap_value(bragg_angle))
+        print(
+            f"Gaussian centre for Bragg angle "
+            f"{gaussian_generator.function_params[2]:.4f} "
+            f"{bragg_angle:.4f}"
+        )
+
+    # Update x, and centre position of curve when bragg angle changes
+    def subscribe_values():
+        yield from bps.sleep(0)  # to keep RunEngine happy
+        bragg_motor.user_readback.subscribe_value(update_centre)
+        undulator_gap_motor.user_readback.subscribe_value(gaussian_generator.set_x)
+
+    RE(subscribe_values())
+
+# lookup table in same directory as this script (offline_testing)
+beamline_lookuptable_dir = str(pathlib.Path(__file__).parent.resolve())
+filename = beamline_lookuptable_dir + "/Si111_harmonic7.txt"
+
+# load lookuptable from ascii file and fit quadratic curve
+undulator_gap_value = load_lookuptable_curve(filename, show_plot=False)
+
+bragg_start = 17.5
+bragg_end = 12.0
+bragg_step = -0.5
+bragg_num_steps = int(1 + (bragg_end - bragg_start) / bragg_step)
+gap_scan_output_name = beamline_lookuptable_dir + "/gap_scan_results.txt"
+curve_fit_callback = FitCurvesMaxValue()
 
 RE(
-    undulator_lookuptable_scan(
+    undulator_lookuptable_scan_autogap(
         bragg_start,
-        -bragg_step,
+        bragg_step,
         bragg_num_steps,
-        gap_start,
-        gap_range,
-        0.01,
+        filename,
         bragg_motor,
         undulator_gap_motor,
         d7diode,
-        gap_offset=0.0,
+        gap_range_multiplier=3,
         use_last_peak=True,
-        show_plot=False,
-        fit_parameters=fit_results,
-        output_file=base_dir + "/bl_scan_data_large_range.txt",
+        output_file=gap_scan_output_name,
+        curve_fit_callback=curve_fit_callback,
     )
 )
 
+# Load the result of undulator-bragg scan
+data, fit_params = load_fit_results(gap_scan_output_name, True)
+
 # Generate new lookup table from fit results
-bragg_end = bragg_start - bragg_step * bragg_num_steps
 bragg_step = 0.01
-generate_new_ascii_lookuptable(
-    base_dir + "bl_table_large_range.txt",
-    fit_results,
+
+generate_ascii_lookuptable(
+    beamline_lookuptable_dir + "/bl_table_large_range.txt",
+    fit_params,
     bragg_start,
     bragg_end,
     bragg_step,
