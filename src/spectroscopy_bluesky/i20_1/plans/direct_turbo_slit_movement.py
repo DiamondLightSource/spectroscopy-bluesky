@@ -410,11 +410,11 @@ def seq_table(
     table = SeqTable()  # type: ignore
 
     # Prepare motor info using trajectory scanning
-    spec = Fly(duration @ (number_of_sweeps * Line(motor, start, stop, num)))
+    spec = Fly(duration @ (number_of_sweeps * ~Line(motor, start, stop, num)))
 
     times = spec.frames().duration
     positions = spec.frames().midpoints[motor]
-    positions = [int(x / MRES) for x in positions]
+    positions = [int(x / MRES) for x in spec.frames().midpoints[motor]]
 
     # Writes down the desired positions that will be written to the sequencer table
     f = h5py.File(
@@ -424,7 +424,7 @@ def seq_table(
     f.create_dataset("positions", shape=(1, len(positions)), data=positions)
 
     counter = 0
-    for t, p in zip(times, positions, strict=False):
+    for _t, p in zip(times, positions, strict=False):
         # As we do multiple swipes it's necessary to change the comparison
         # for triggering the sequencer table.
         # This is not the best way of doing it but will sufice for now
@@ -439,7 +439,7 @@ def seq_table(
             repeats=1,
             trigger=direction,
             position=p,
-            time1=int(t / 1e-6),
+            time1=1,  # int(t / 1e-6),
             outa1=True,
             time2=1,
             outa2=False,
@@ -455,7 +455,7 @@ def seq_table(
 
     # Prepare Panda file writer trigger info
     panda_hdf_info = TriggerInfo(
-        number_of_events=num,
+        number_of_events=len(positions),
         trigger=DetectorTrigger.CONSTANT_GATE,
         livetime=duration,
         deadtime=1e-5,
