@@ -308,7 +308,6 @@ def trajectory_fly_scan(
     num: int,
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008
-    number_of_sweeps: int = 5,
     restore: bool = False,
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
@@ -328,14 +327,20 @@ def trajectory_fly_scan(
 
     times = spec.frames().duration
     positions = spec.frames().midpoints[motor]
-    positions = [int(x / MRES) for x in positions]
+    positions = [(positions / MRES).astype(int)]
 
     # Writes down the desired positions that will be written to the sequencer table
     f = h5py.File(
         f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
     )
     f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset("positions", shape=(1, len(positions)), data=positions)
+    f.create_dataset(
+        "low_point", shape=(1, len(positions)), data=spec.frames().lower[motor]
+    )
+    f.create_dataset("mid_point", shape=(1, len(positions)), data=positions)
+    f.create_dataset(
+        "up_point", shape=(1, len(positions)), data=spec.frames().upper[motor]
+    )
 
     trigger_logic = spec
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
@@ -392,7 +397,7 @@ def seq_table(
     if restore:
         yield from plan_restore_settings(panda=panda, name="seq_table")
 
-    # Defining the frlyers and components of the scan
+    # Defining the flyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
     motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
     pmac = PmacIO(
@@ -407,8 +412,6 @@ def seq_table(
 
     positions = np.linspace(start / MRES, stop / MRES, num, dtype=int)
 
-    table = SeqTable()  # type: ignore
-
     # Prepare motor info using trajectory scanning
     spec = Fly(duration @ (number_of_sweeps * ~Line(motor, start, stop, num)))
 
@@ -421,8 +424,14 @@ def seq_table(
         f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
     )
     f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset("positions", shape=(1, len(positions)), data=positions)
-
+    f.create_dataset(
+        "low_point", shape=(1, len(positions)), data=spec.frames().lower[motor]
+    )
+    f.create_dataset("mid_point", shape=(1, len(positions)), data=positions)
+    f.create_dataset(
+        "up_point", shape=(1, len(positions)), data=spec.frames().upper[motor]
+    )
+    table = SeqTable()  # type: ignore
     counter = 0
     for _t, p in zip(times, positions, strict=False):
         # As we do multiple swipes it's necessary to change the comparison
@@ -482,16 +491,14 @@ def seq_table(
     yield from inner_plan()
 
 
-def Si111_energies_to_Bragg(Ei, Ef, dE):
-    print(f"param\nEi = {Ei}, Ef = {Ef}, dE = {dE}\n")
-    energies = np.arange(Ei, Ef + dE, dE)  # include Ef as last point in the array
-    angles = np.degrees(np.arcsin(1977.59 / energies))
+def Si111_energies_to_Bragg(energy_array):
+    angles = np.degrees(np.arcsin(1977.59 / np.asarray(energy_array)))
     return angles
 
 
 def seq_non_linear(
-    ei: int,
-    ef: int,
+    ei: float,
+    ef: float,
     de: float,
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008)
@@ -507,16 +514,18 @@ def seq_non_linear(
     pmac = PmacIO(
         prefix="BL20J-MO-STEP-06:", raw_motors=[motor], coord_nums=[3], name="pmac"
     )
-    yield from ensure_connected(pmac, motor)
-    angle = Si111_energies_to_Bragg(ei, ef, de)
+    yield from ensure_connected(pmac, motor, panda)
+
+    energies = np.arange(ei, ef + de, de)  # include Ef as last point in the array
+    print(f"param\nEi = {ei}, Ef = {ef}, dE = {de}\n")
+
+    angle = Si111_energies_to_Bragg(energies)
     energies = np.arange(ei, ef + de, de)
 
     table = SeqTable()  # type: ignore
 
     # Prepare motor info using trajectory scanning
-    spec = Fly(
-        float(duration) @ (Line(motor, angle[0], angle[len(angle) - 1], len(angle)))
-    )
+    spec = Fly(float(duration) @ (Line(motor, angle[0], angle[-1], len(angle))))
     times = spec.frames().duration if spec.frames().duration is not None else []
     positions = spec.frames().lower[motor]
     positions = [int(x / MRES) for x in positions]
@@ -526,17 +535,24 @@ def seq_non_linear(
         f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
     )
     f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset("positions", shape=(1, len(positions)), data=positions)
+    f.create_dataset(
+        "low_point", shape=(1, len(positions)), data=spec.frames().lower[motor]
+    )
+    f.create_dataset(
+        "mid_point", shape=(1, len(positions)), data=spec.frames().midpoints[motor]
+    )
+    f.create_dataset(
+        "up_point", shape=(1, len(positions)), data=spec.frames().upper[motor]
+    )
     f.create_dataset("angle", shape=(1, len(angle)), data=angle)
     f.create_dataset("energies", shape=(1, len(energies)), data=energies)
     counter = 0
-    angle_int = [int(x / MRES) for x in angle]
 
     direction = SeqTrigger.POSA_LT
-    if angle_int[0] < angle_int[-1]:
+    if positions[0] < positions[-1]:
         direction = SeqTrigger.POSA_GT
 
-    for _t, p in zip(times, angle_int, strict=False):
+    for p in positions:
         # As we do multiple swipes it's necessary to change the comparison
         # for triggering the sequencer table.
         # This is not the best way of doing it but will sufice for now

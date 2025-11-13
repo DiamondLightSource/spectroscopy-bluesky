@@ -57,6 +57,7 @@ def case_2(
             de=step,
             duration=duration,
             panda=p,
+            restore=False,
         )
     )
 
@@ -108,7 +109,6 @@ def case_1_pcomp(
             num=num,
             duration=duration,
             panda=p,
-            number_of_sweeps=sweeps,
         )
     )
 
