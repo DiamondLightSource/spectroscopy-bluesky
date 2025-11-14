@@ -335,11 +335,19 @@ def trajectory_fly_scan(
     )
     f.create_dataset("time", shape=(1, len(times)), data=times)
     f.create_dataset(
-        "low_point", shape=(1, len(positions)), data=spec.frames().lower[motor]
+        "trajectory_setpoint_low",
+        shape=(1, len(positions)),
+        data=spec.frames().lower[motor],
     )
-    f.create_dataset("mid_point", shape=(1, len(positions)), data=positions)
     f.create_dataset(
-        "up_point", shape=(1, len(positions)), data=spec.frames().upper[motor]
+        "trajectory_setpoint_mid",
+        shape=(1, len(positions)),
+        data=spec.frames().midpoints[motor],
+    )
+    f.create_dataset(
+        "trajectory_setpoint_up",
+        shape=(1, len(positions)),
+        data=spec.frames().upper[motor],
     )
 
     trigger_logic = spec
@@ -416,8 +424,8 @@ def seq_table(
     spec = Fly(duration @ (number_of_sweeps * ~Line(motor, start, stop, num)))
 
     times = spec.frames().duration
-    positions = spec.frames().midpoints[motor]
-    positions = [int(x / MRES) for x in spec.frames().midpoints[motor]]
+    positions = spec.frames().lower[motor]
+    positions = [(positions / MRES).astype(int)]
 
     # Writes down the desired positions that will be written to the sequencer table
     f = h5py.File(
@@ -425,11 +433,19 @@ def seq_table(
     )
     f.create_dataset("time", shape=(1, len(times)), data=times)
     f.create_dataset(
-        "low_point", shape=(1, len(positions)), data=spec.frames().lower[motor]
+        "trajectory_setpoint_low",
+        shape=(1, len(positions)),
+        data=spec.frames().lower[motor],
     )
-    f.create_dataset("mid_point", shape=(1, len(positions)), data=positions)
     f.create_dataset(
-        "up_point", shape=(1, len(positions)), data=spec.frames().upper[motor]
+        "trajectory_setpoint_mid",
+        shape=(1, len(positions)),
+        data=spec.frames().midpoints[motor],
+    )
+    f.create_dataset(
+        "trajectory_setpoint_up",
+        shape=(1, len(positions)),
+        data=spec.frames().upper[motor],
     )
     table = SeqTable()  # type: ignore
     counter = 0
@@ -527,8 +543,7 @@ def seq_non_linear(
     # Prepare motor info using trajectory scanning
     spec = Fly(float(duration) @ (Line(motor, angle[0], angle[-1], len(angle))))
     times = spec.frames().duration if spec.frames().duration is not None else []
-    positions = spec.frames().lower[motor]
-    positions = [int(x / MRES) for x in positions]
+    positions = [int(x / MRES) for x in angle]
 
     # Writes down the desired positions that will be written to the sequencer table
     f = h5py.File(
@@ -536,13 +551,19 @@ def seq_non_linear(
     )
     f.create_dataset("time", shape=(1, len(times)), data=times)
     f.create_dataset(
-        "low_point", shape=(1, len(positions)), data=spec.frames().lower[motor]
+        "trajectory_setpoint_low",
+        shape=(1, len(positions)),
+        data=spec.frames().lower[motor],
     )
     f.create_dataset(
-        "mid_point", shape=(1, len(positions)), data=spec.frames().midpoints[motor]
+        "trajectory_setpoint_mid",
+        shape=(1, len(positions)),
+        data=spec.frames().midpoints[motor],
     )
     f.create_dataset(
-        "up_point", shape=(1, len(positions)), data=spec.frames().upper[motor]
+        "trajectory_setpoint_up",
+        shape=(1, len(positions)),
+        data=spec.frames().upper[motor],
     )
     f.create_dataset("angle", shape=(1, len(angle)), data=angle)
     f.create_dataset("energies", shape=(1, len(energies)), data=energies)
