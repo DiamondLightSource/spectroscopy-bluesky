@@ -1,10 +1,11 @@
 import asyncio
 import math as mt
-from datetime import datetime
 
+# from datetime import datetime
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
-import h5py
+
+# import h5py
 import numpy as np
 from aioca import caput
 from bluesky.utils import MsgGenerator
@@ -325,30 +326,30 @@ def trajectory_fly_scan(
 
     spec = Fly(float(duration) @ (Line(motor, start, stop, num)))
 
-    times = spec.frames().duration
+    # times = spec.frames().duration
     positions = spec.frames().midpoints[motor]
     positions = [(positions / MRES).astype(int)]
 
     # Writes down the desired positions that will be written to the sequencer table
-    f = h5py.File(
-        f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    )
-    f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset(
-        "trajectory_setpoint_low",
-        shape=(1, len(positions)),
-        data=spec.frames().lower[motor],
-    )
-    f.create_dataset(
-        "trajectory_setpoint_mid",
-        shape=(1, len(positions)),
-        data=spec.frames().midpoints[motor],
-    )
-    f.create_dataset(
-        "trajectory_setpoint_up",
-        shape=(1, len(positions)),
-        data=spec.frames().upper[motor],
-    )
+    # f = h5py.File(
+    #     f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
+    # )
+    # f.create_dataset("time", shape=(1, len(times)), data=times)
+    # f.create_dataset(
+    #     "trajectory_setpoint_low",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().lower[motor],
+    # )
+    # f.create_dataset(
+    #     "trajectory_setpoint_mid",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().midpoints[motor],
+    # )
+    # f.create_dataset(
+    #     "trajectory_setpoint_up",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().upper[motor],
+    # )
 
     trigger_logic = spec
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
@@ -428,28 +429,29 @@ def seq_table(
     positions = [(positions / MRES).astype(int)]
 
     # Writes down the desired positions that will be written to the sequencer table
-    f = h5py.File(
-        f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    )
-    f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset(
-        "trajectory_setpoint_low",
-        shape=(1, len(positions)),
-        data=spec.frames().lower[motor],
-    )
-    f.create_dataset(
-        "trajectory_setpoint_mid",
-        shape=(1, len(positions)),
-        data=spec.frames().midpoints[motor],
-    )
-    f.create_dataset(
-        "trajectory_setpoint_up",
-        shape=(1, len(positions)),
-        data=spec.frames().upper[motor],
-    )
+    # f = h5py.File(
+    #     f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
+    # )
+    # f.create_dataset("time", shape=(1, len(times)), data=times)
+    # f.create_dataset(
+    #     "trajectory_setpoint_low",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().lower[motor],
+    # )
+    # f.create_dataset(
+    #     "trajectory_setpoint_mid",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().midpoints[motor],
+    # )
+    # f.create_dataset(
+    #     "trajectory_setpoint_up",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().upper[motor],
+    # )
+
     table = SeqTable()  # type: ignore
     counter = 0
-    for _t, p in zip(times, positions, strict=False):
+    for t, p in zip(times, positions, strict=False):
         # As we do multiple swipes it's necessary to change the comparison
         # for triggering the sequencer table.
         # This is not the best way of doing it but will sufice for now
@@ -464,9 +466,9 @@ def seq_table(
             repeats=1,
             trigger=direction,
             position=p,
-            time1=1,  # int(t / 1e-6),
+            time1=int(t / 1e-6) - 10,
             outa1=True,
-            time2=1,
+            time2=10,
             outa2=False,
         )
 
@@ -542,31 +544,31 @@ def seq_non_linear(
 
     # Prepare motor info using trajectory scanning
     spec = Fly(float(duration) @ (Line(motor, angle[0], angle[-1], len(angle))))
-    times = spec.frames().duration if spec.frames().duration is not None else []
+    # times = spec.frames().duration if spec.frames().duration is not None else []
     positions = [int(x / MRES) for x in angle]
 
     # Writes down the desired positions that will be written to the sequencer table
-    f = h5py.File(
-        f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    )
-    f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset(
-        "trajectory_setpoint_low",
-        shape=(1, len(positions)),
-        data=spec.frames().lower[motor],
-    )
-    f.create_dataset(
-        "trajectory_setpoint_mid",
-        shape=(1, len(positions)),
-        data=spec.frames().midpoints[motor],
-    )
-    f.create_dataset(
-        "trajectory_setpoint_up",
-        shape=(1, len(positions)),
-        data=spec.frames().upper[motor],
-    )
-    f.create_dataset("angle", shape=(1, len(angle)), data=angle)
-    f.create_dataset("energies", shape=(1, len(energies)), data=energies)
+    # f = h5py.File(
+    #     f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
+    # )
+    # f.create_dataset("time", shape=(1, len(times)), data=times)
+    # f.create_dataset(
+    #     "trajectory_setpoint_low",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().lower[motor],
+    # )
+    # f.create_dataset(
+    #     "trajectory_setpoint_mid",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().midpoints[motor],
+    # )
+    # f.create_dataset(
+    #     "trajectory_setpoint_up",
+    #     shape=(1, len(positions)),
+    #     data=spec.frames().upper[motor],
+    # )
+    # f.create_dataset("angle", shape=(1, len(angle)), data=angle)
+    # f.create_dataset("energies", shape=(1, len(energies)), data=energies)
     counter = 0
 
     direction = SeqTrigger.POSA_LT
