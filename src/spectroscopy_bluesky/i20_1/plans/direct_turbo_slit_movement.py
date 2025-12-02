@@ -326,31 +326,6 @@ def trajectory_fly_scan(
 
     spec = Fly(float(duration) @ (Line(motor, start, stop, num)))
 
-    # times = spec.frames().duration
-    positions = spec.frames().midpoints[motor]
-    positions = [(positions / MRES).astype(int)]
-
-    # Writes down the desired positions that will be written to the sequencer table
-    # f = h5py.File(
-    #     f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    # )
-    # f.create_dataset("time", shape=(1, len(times)), data=times)
-    # f.create_dataset(
-    #     "trajectory_setpoint_low",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().lower[motor],
-    # )
-    # f.create_dataset(
-    #     "trajectory_setpoint_mid",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().midpoints[motor],
-    # )
-    # f.create_dataset(
-    #     "trajectory_setpoint_up",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().upper[motor],
-    # )
-
     trigger_logic = spec
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
@@ -425,8 +400,7 @@ def seq_table(
     spec = Fly(duration @ (number_of_sweeps * ~Line(motor, start, stop, num)))
 
     times = spec.frames().duration
-    positions = spec.frames().lower[motor]
-    positions = [(positions / MRES).astype(int)]
+    positions = [(x / MRES).astype(int) for x in spec.frames().lower[motor]]
 
     # Writes down the desired positions that will be written to the sequencer table
     # f = h5py.File(
@@ -466,9 +440,9 @@ def seq_table(
             repeats=1,
             trigger=direction,
             position=p,
-            time1=int(t / 1e-6) - 10,
+            time1=int(t / 1e-6) - 1,
             outa1=True,
-            time2=10,
+            time2=1,
             outa2=False,
         )
 
@@ -545,7 +519,7 @@ def seq_non_linear(
     # Prepare motor info using trajectory scanning
     spec = Fly(float(duration) @ (Line(motor, angle[0], angle[-1], len(angle))))
     # times = spec.frames().duration if spec.frames().duration is not None else []
-    positions = [int(x / MRES) for x in angle]
+    positions = [(x / MRES).astype(int) for x in angle]
 
     # Writes down the desired positions that will be written to the sequencer table
     # f = h5py.File(
