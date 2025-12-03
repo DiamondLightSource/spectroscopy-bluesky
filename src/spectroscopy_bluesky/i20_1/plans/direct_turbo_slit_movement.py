@@ -1,11 +1,8 @@
 import asyncio
 import math as mt
 
-# from datetime import datetime
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
-
-# import h5py
 import numpy as np
 from aioca import caput
 from bluesky.utils import MsgGenerator
@@ -399,27 +396,6 @@ def seq_table(
 
     positions = [(x / MRES).astype(int) for x in spec.frames().lower[motor]]
 
-    # Writes down the desired positions that will be written to the sequencer table
-    # f = h5py.File(
-    #     f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    # )
-    # f.create_dataset("time", shape=(1, len(times)), data=times)
-    # f.create_dataset(
-    #     "trajectory_setpoint_low",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().lower[motor],
-    # )
-    # f.create_dataset(
-    #     "trajectory_setpoint_mid",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().midpoints[motor],
-    # )
-    # f.create_dataset(
-    #     "trajectory_setpoint_up",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().upper[motor],
-    # )
-
     direction = [
         SeqTrigger.POSA_GT if a * MRES < b * MRES else SeqTrigger.POSA_LT
         for a, b in zip(
@@ -510,36 +486,7 @@ def seq_non_linear(
 
     # Prepare motor info using trajectory scanning
     spec = Fly(float(duration) @ (Line(motor, angle[0], angle[-1], len(angle))))
-    # times = spec.frames().duration if spec.frames().duration is not None else []
     positions = [(x / MRES).astype(int) for x in angle]
-
-    # Writes down the desired positions that will be written to the sequencer table
-    # f = h5py.File(
-    #     f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    # )
-    # f.create_dataset("time", shape=(1, len(times)), data=times)
-    # f.create_dataset(
-    #     "trajectory_setpoint_low",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().lower[motor],
-    # )
-    # f.create_dataset(
-    #     "trajectory_setpoint_mid",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().midpoints[motor],
-    # )
-    # f.create_dataset(
-    #     "trajectory_setpoint_up",
-    #     shape=(1, len(positions)),
-    #     data=spec.frames().upper[motor],
-    # )
-    # f.create_dataset("angle", shape=(1, len(angle)), data=angle)
-    # f.create_dataset("energies", shape=(1, len(energies)), data=energies)
-    # counter = 0
-
-    # direction = SeqTrigger.POSA_LT
-    # if positions[0] < positions[-1]:
-    #     direction = SeqTrigger.POSA_GT
 
     direction = [
         SeqTrigger.POSA_GT if a * MRES < b * MRES else SeqTrigger.POSA_LT
@@ -550,16 +497,6 @@ def seq_non_linear(
 
     table = SeqTable()  # type: ignore
     for d, p in zip(direction, positions, strict=True):
-        # As we do multiple swipes it's necessary to change the comparison
-        # for triggering the sequencer table.
-        # This is not the best way of doing it but will sufice for now
-        # if counter == len(angle):
-        #     if direction == SeqTrigger.POSA_GT:
-        #         direction = SeqTrigger.POSA_LT
-        #     else:
-        #         direction = SeqTrigger.POSA_GT
-        #     counter = 0
-
         table += SeqTable.row(
             repeats=1,
             trigger=d,
