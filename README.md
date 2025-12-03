@@ -7,27 +7,61 @@
 
 Plans to use at spectroscopy beamlines at DLS
 
-This is where you should write a short paragraph that describes what your module does,
-how it does it, and why people should use it.
+Currently the `scan_runner` tool is available to run some tests scans in I20-1's turbo slits.
 
-Source          | <https://github.com/DiamondLightSource/spectroscopy-bluesky>
-:---:           | :---:
-PyPI            | `pip install spectroscopy-bluesky`
-Docker          | `docker run ghcr.io/diamondlightsource/spectroscopy-bluesky:latest`
-Releases        | <https://github.com/DiamondLightSource/spectroscopy-bluesky/releases>
+In order to run the scans you'll first need to install the repository into a virtual environment:
 
-This is where you should put some images or code snippets that illustrate
-some relevant examples. If it is a library then you might put some
-introductory code here:
-
-```python
-from spectroscopy_bluesky import __version__
-
-print(f"Hello spectroscopy_bluesky {__version__}")
+```bash
+python -m venv venv
+sourve venv/bin/activate
+pip install --upgrade pip
+pip install -e .
 ```
 
-Or if it is a commandline tool then you might put some example commands here:
+It's important to remember that due to network isolation, in order to run the scans you'll need to access a machine that's currently connected to I20-1's network. This can be done by:
 
+```bash
+ssh i20-1-ws002
 ```
-python -m spectroscopy_bluesky --version
+
+if you already have the environment installed you can just source otherwise you'll need to install it (steps above).
+
+Once the module has been installed and you have access to the network you can run the `scan_runner` tool by typing:
+
+```bash
+./scan_runner --help
+```
+
+This will give you an overview of all the available scans, like this:
+
+```bash
+│ case-2         Run an "energy" scan with constant speed on the motor and SeqTable. Steps are not linearly spaced. But time between them is always equal to 1us. │
+│ case-1         Run a trajectory scan using the sequencer table as a trigger source and a trajectory on the PMAC. Constant speed and step size.                                            │
+│ case-1-pcomp   Run a trajectory scan using the PCOMP block as trigger source and a trajectory on the PMAC. Constant speed and step size.                                                  │
+│ fly-scan       Run a scan using the PCOMP block as trigger source.                                                                                                                        │
+```
+
+each case can be expanded to give more information by doing:
+```bash
+./scan_runner case-1 --help
+```
+
+Which will print this:
+
+```bash
+ Usage: scan_runner.py case-1 [OPTIONS]                                                                                                                                                      
+                                                                                                                                                                                             
+ Run a trajectory scan using the sequencer table as a trigger source and a trajectory on the PMAC. Constant speed and step size.                                                             
+                                                                                                                                                                                             
+ Currently only supports one sequencer table with 4096 points.                                                                                                                               
+ This scan requires the `seq_table` design to be loaded in the Panda.                                                                                                                        
+                                                                                                                                                                                             
+╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --start           FLOAT    Starting position/energy of the scan [default: 0.0]                                                                                                            │
+│ --stop            FLOAT    Ending position/energy of the scan [default: 10.0]                                                                                                             │
+│ --num             INTEGER  Number of points of the scan [default: 100]                                                                                                                    │
+│ --duration        FLOAT    Duration of the acquisition starting on the rising edge of a trigger [default: 0.01]                                                                           │
+│ --sweeps          INTEGER  Number of sweeps [default: 1]                                                                                                                                  │
+│ --help                     Show this message and exit.                                                                                                                                    │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```

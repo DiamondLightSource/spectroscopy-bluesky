@@ -1,30 +1,26 @@
 import asyncio
 import math as mt
-from datetime import datetime
 
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
-import h5py
 import numpy as np
 from aioca import caput
 from bluesky.utils import MsgGenerator
-
-# from dodal.beamlines.i20_1 import panda, turbo_slit
 from dodal.beamlines.i20_1 import turbo_slit
 from dodal.common.coordination import inject
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 from ophyd_async.core import (
     DetectorTrigger,
+    FlyMotorInfo,
     StandardFlyer,
     TriggerInfo,
+    YamlSettingsProvider,
     wait_for_value,
 )
-from ophyd_async.epics.motor import FlyMotorInfo
+from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
-    Pmac,
-    PmacMotor,
+    PmacIO,
     PmacTrajectoryTriggerLogic,
-    PmacTrajInfo,
 )
 from ophyd_async.fastcs.panda import (
     HDFPanda,
@@ -37,13 +33,17 @@ from ophyd_async.fastcs.panda import (
     StaticSeqTableTriggerLogic,
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
-from ophyd_async.plan_stubs import ensure_connected
-from scanspec.specs import Line, Repeat, fly
+from ophyd_async.plan_stubs import (
+    apply_panda_settings,
+    ensure_connected,
+    retrieve_settings,
+    store_settings,
+)
+from scanspec.specs import Fly, Line
 
 PATH = "/dls/i20-1/data/2023/cm33897-5/bluesky/"
 
 MRES = -1 / 10000
-# pmac = Pmac(prefix="BL20J-MO-STEP-06",name="pmac")
 
 
 class _StaticPcompTriggerLogic(StaticPcompTriggerLogic):
@@ -306,36 +306,26 @@ def trajectory_fly_scan(
     num: int,
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008
-    number_of_sweeps: int = 5,
+    restore: bool = False,
 ) -> MsgGenerator:
+    # Start the plan by loading the saved design for this scan
+    if restore:
+        yield from plan_restore_settings(panda=panda, name="pcomp_auto_reset")
+
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
-
-    pmac = Pmac(prefix="BL20J-MO-STEP-06", name="pmac")
-    motor = PmacMotor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    pmac = PmacIO(
+        prefix="BL20J-MO-STEP-06:", raw_motors=[motor], coord_nums=[3], name="pmac"
+    )
 
     yield from ensure_connected(pmac, motor)
 
-    spec = fly(
-        Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
-        duration,
-    )
+    spec = Fly(float(duration) @ (Line(motor, start, stop, num)))
 
-    times = spec.frames().midpoints["DURATION"]
-    positions = spec.frames().midpoints[motor]
-    positions = [int(x / MRES) for x in positions]
-
-    # Writes down the desired positions that will be written to the sequencer table
-    f = h5py.File(
-        f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    )
-    f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset("positions", shape=(1, len(positions)), data=positions)
-
-    info = PmacTrajInfo(spec=spec)  # type: ignore
-
-    traj = PmacTrajectoryTriggerLogic(pmac)
-    traj_flyer = StandardFlyer(traj)
+    trigger_logic = spec
+    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
     @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
@@ -360,7 +350,7 @@ def trajectory_fly_scan(
             deadtime=1e-5,
         )
 
-        yield from bps.prepare(traj_flyer, info, wait=True)
+        yield from bps.prepare(pmac_trajectory_flyer, trigger_logic, wait=True)
         # prepare both pcomps
         yield from bps.prepare(panda_pcomp1, pcomp_info1, wait=True)
         yield from bps.prepare(panda_pcomp2, pcomp_info2, wait=True)
@@ -368,25 +358,32 @@ def trajectory_fly_scan(
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
 
         yield from bps.kickoff(panda, wait=True)
-        yield from bps.kickoff(traj_flyer, wait=True)
+        yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
-        yield from bps.complete_all(traj_flyer, panda, wait=True)
+        yield from bps.complete_all(pmac_trajectory_flyer, panda, wait=True)
 
     yield from inner_plan()
 
 
-def seq_table_test(
+def seq_table(
     start: float,
     stop: float,
     num: int,
     duration: float,
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 3,
+    restore: bool = False,
 ):
-    # Defining the frlyers and components of the scan
+    # Start the plan by loading the saved design for this scan
+    if restore:
+        yield from plan_restore_settings(panda=panda, name="seq_table")
+
+    # Defining the flyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
-    pmac = Pmac(prefix="BL20J-MO-STEP-06", name="pmac")
-    motor = PmacMotor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    pmac = PmacIO(
+        prefix="BL20J-MO-STEP-06:", raw_motors=[motor], coord_nums=[3], name="pmac"
+    )
     yield from ensure_connected(pmac, motor)
 
     # Prepare Panda trigger info using sequencer table
@@ -394,44 +391,26 @@ def seq_table_test(
     if start < stop:
         direction = SeqTrigger.POSA_LT
 
-    positions = np.linspace(start / MRES, stop / MRES, num, dtype=int)
+    # Prepare motor info using trajectory scanning
+    spec = Fly(duration @ (number_of_sweeps * ~Line(motor, start, stop, num)))
+
+    positions = [(x / MRES).astype(int) for x in spec.frames().lower[motor]]
+
+    direction = [
+        SeqTrigger.POSA_GT if a * MRES < b * MRES else SeqTrigger.POSA_LT
+        for a, b in zip(
+            spec.frames().lower[motor], spec.frames().upper[motor], strict=True
+        )
+    ]
 
     table = SeqTable()  # type: ignore
-
-    # Prepare motor info using trajectory scanning
-    spec = fly(
-        Repeat(number_of_sweeps, gap=True) * ~Line(motor, start, stop, num),
-        duration,
-    )
-
-    times = spec.frames().midpoints["DURATION"]
-    positions = spec.frames().midpoints[motor]
-    positions = [int(x / MRES) for x in positions]
-
-    # Writes down the desired positions that will be written to the sequencer table
-    f = h5py.File(
-        f"{PATH}i20-1-extra-{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.h5", "w"
-    )
-    f.create_dataset("time", shape=(1, len(times)), data=times)
-    f.create_dataset("positions", shape=(1, len(positions)), data=positions)
-
     counter = 0
-    for t, p in zip(times, positions, strict=False):
-        # As we do multiple swipes it's necessary to change the comparison
-        # for triggering the sequencer table.
-        # This is not the best way of doing it but will sufice for now
-        if counter == num:
-            if direction == SeqTrigger.POSA_GT:
-                direction = SeqTrigger.POSA_LT
-            else:
-                direction = SeqTrigger.POSA_GT
-            counter = 0
-
+    for d, p in zip(direction, positions, strict=False):
         table += SeqTable.row(
             repeats=1,
-            trigger=direction,
+            trigger=d,
             position=p,
-            time1=int(t / 1e-6),
+            time1=int(duration / 1e-6) - 1,
             outa1=True,
             time2=1,
             outa2=False,
@@ -441,14 +420,13 @@ def seq_table_test(
 
     seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
-    info = PmacTrajInfo(spec=spec)  # type: ignore
-
-    traj = PmacTrajectoryTriggerLogic(pmac)
-    traj_flyer = StandardFlyer(traj)
+    trigger_logic = spec
+    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
     # Prepare Panda file writer trigger info
     panda_hdf_info = TriggerInfo(
-        number_of_events=num,
+        number_of_events=len(positions),
         trigger=DetectorTrigger.CONSTANT_GATE,
         livetime=duration,
         deadtime=1e-5,
@@ -459,7 +437,7 @@ def seq_table_test(
     @bpp.stage_decorator([panda, panda_seq])
     def inner_plan():
         # Prepare pmac with the trajectory
-        yield from bps.prepare(traj_flyer, info, wait=True)
+        yield from bps.prepare(pmac_trajectory_flyer, trigger_logic, wait=True)
         # prepare sequencer table
         yield from bps.prepare(panda_seq, seq_table_info, wait=True)
         # prepare panda and hdf writer once, at start of scan
@@ -468,8 +446,113 @@ def seq_table_test(
         # kickoff devices waiting for all of them
         yield from bps.kickoff(panda, wait=True)
         yield from bps.kickoff(panda_seq, wait=True)
-        yield from bps.kickoff(traj_flyer, wait=True)
+        yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
-        yield from bps.complete_all(traj_flyer, panda_seq, panda, wait=True)
+        yield from bps.complete_all(pmac_trajectory_flyer, panda_seq, panda, wait=True)
 
     yield from inner_plan()
+
+
+def Si111_energies_to_Bragg(energy_array):
+    angles = np.degrees(np.arcsin(1977.59 / np.asarray(energy_array)))
+    return angles
+
+
+def seq_non_linear(
+    ei: float,
+    ef: float,
+    de: float,
+    duration: float,
+    panda: HDFPanda = inject("panda"),  # noqa: B008)
+    restore: bool = False,
+):
+    # Start the plan by loading the saved design for this scan
+    if restore:
+        yield from plan_restore_settings(panda=panda, name="seq_table")
+
+    # Defining the flyers and components of the scan
+    panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
+    motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
+    pmac = PmacIO(
+        prefix="BL20J-MO-STEP-06:", raw_motors=[motor], coord_nums=[3], name="pmac"
+    )
+    yield from ensure_connected(pmac, motor, panda)
+
+    energies = np.arange(ei, ef + de, de)  # include Ef as last point in the array
+    print(f"param\nEi = {ei}, Ef = {ef}, dE = {de}\n")
+
+    angle = Si111_energies_to_Bragg(energies)
+    energies = np.arange(ei, ef + de, de)
+
+    # Prepare motor info using trajectory scanning
+    spec = Fly(float(duration) @ (Line(motor, angle[0], angle[-1], len(angle))))
+    positions = [(x / MRES).astype(int) for x in angle]
+
+    direction = [
+        SeqTrigger.POSA_GT if a * MRES < b * MRES else SeqTrigger.POSA_LT
+        for a, b in zip(
+            spec.frames().lower[motor], spec.frames().upper[motor], strict=True
+        )
+    ]
+
+    table = SeqTable()  # type: ignore
+    for d, p in zip(direction, positions, strict=True):
+        table += SeqTable.row(
+            repeats=1,
+            trigger=d,
+            position=p,
+            time1=1,
+            outa1=True,
+            outb1=True,
+            time2=1,
+            outa2=False,
+            outb2=True,
+        )
+
+        # counter += 1
+
+    seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
+
+    trigger_logic = spec
+    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
+
+    # Prepare Panda file writer trigger info
+    panda_hdf_info = TriggerInfo(
+        number_of_events=len(angle),
+        trigger=DetectorTrigger.CONSTANT_GATE,
+        livetime=duration,
+        deadtime=1e-5,
+    )
+
+    @attach_data_session_metadata_decorator()
+    @bpp.run_decorator()
+    @bpp.stage_decorator([panda, panda_seq])
+    def inner_plan():
+        # Prepare pmac with the trajectory
+        yield from bps.prepare(pmac_trajectory_flyer, trigger_logic, wait=True)
+        # prepare sequencer table
+        yield from bps.prepare(panda_seq, seq_table_info, wait=True)
+        # prepare panda and hdf writer once, at start of scan
+        yield from bps.prepare(panda, panda_hdf_info, wait=True)
+
+        # kickoff devices waiting for all of them
+        yield from bps.kickoff(panda, wait=True)
+        yield from bps.kickoff(panda_seq, wait=True)
+        yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
+
+        yield from bps.complete_all(pmac_trajectory_flyer, panda_seq, panda, wait=True)
+
+    yield from inner_plan()
+
+
+def plan_store_settings(panda: HDFPanda, name: str):
+    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/i20_1/layouts")
+    yield from store_settings(provider, name, panda)
+
+
+def plan_restore_settings(panda: HDFPanda, name: str):
+    print(f"\nrestoring {name} layout\n")
+    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/i20_1/layouts")
+    settings = yield from retrieve_settings(provider, name, panda)
+    yield from apply_panda_settings(settings)
