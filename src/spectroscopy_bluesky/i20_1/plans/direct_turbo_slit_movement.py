@@ -394,12 +394,9 @@ def seq_table(
     if start < stop:
         direction = SeqTrigger.POSA_LT
 
-    positions = np.linspace(start / MRES, stop / MRES, num, dtype=int)
-
     # Prepare motor info using trajectory scanning
     spec = Fly(duration @ (number_of_sweeps * ~Line(motor, start, stop, num)))
 
-    times = spec.frames().duration
     positions = [(x / MRES).astype(int) for x in spec.frames().lower[motor]]
 
     # Writes down the desired positions that will be written to the sequencer table
@@ -423,24 +420,21 @@ def seq_table(
     #     data=spec.frames().upper[motor],
     # )
 
+    direction = [
+        SeqTrigger.POSA_GT if a * MRES < b * MRES else SeqTrigger.POSA_LT
+        for a, b in zip(
+            spec.frames().lower[motor], spec.frames().upper[motor], strict=True
+        )
+    ]
+
     table = SeqTable()  # type: ignore
     counter = 0
-    for t, p in zip(times, positions, strict=False):
-        # As we do multiple swipes it's necessary to change the comparison
-        # for triggering the sequencer table.
-        # This is not the best way of doing it but will sufice for now
-        if counter == num:
-            if direction == SeqTrigger.POSA_GT:
-                direction = SeqTrigger.POSA_LT
-            else:
-                direction = SeqTrigger.POSA_GT
-            counter = 0
-
+    for d, p in zip(direction, positions, strict=False):
         table += SeqTable.row(
             repeats=1,
-            trigger=direction,
+            trigger=d,
             position=p,
-            time1=int(t / 1e-6) - 1,
+            time1=int(duration / 1e-6) - 1,
             outa1=True,
             time2=1,
             outa2=False,
@@ -500,7 +494,7 @@ def seq_non_linear(
     if restore:
         yield from plan_restore_settings(panda=panda, name="seq_table")
 
-    # Defining the frlyers and components of the scan
+    # Defining the flyers and components of the scan
     panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
     motor = Motor(prefix="BL20J-OP-PCHRO-01:TS:XFINE", name="X")
     pmac = PmacIO(
@@ -513,8 +507,6 @@ def seq_non_linear(
 
     angle = Si111_energies_to_Bragg(energies)
     energies = np.arange(ei, ef + de, de)
-
-    table = SeqTable()  # type: ignore
 
     # Prepare motor info using trajectory scanning
     spec = Fly(float(duration) @ (Line(motor, angle[0], angle[-1], len(angle))))
@@ -543,26 +535,34 @@ def seq_non_linear(
     # )
     # f.create_dataset("angle", shape=(1, len(angle)), data=angle)
     # f.create_dataset("energies", shape=(1, len(energies)), data=energies)
-    counter = 0
+    # counter = 0
 
-    direction = SeqTrigger.POSA_LT
-    if positions[0] < positions[-1]:
-        direction = SeqTrigger.POSA_GT
+    # direction = SeqTrigger.POSA_LT
+    # if positions[0] < positions[-1]:
+    #     direction = SeqTrigger.POSA_GT
 
-    for p in positions:
+    direction = [
+        SeqTrigger.POSA_GT if a * MRES < b * MRES else SeqTrigger.POSA_LT
+        for a, b in zip(
+            spec.frames().lower[motor], spec.frames().upper[motor], strict=True
+        )
+    ]
+
+    table = SeqTable()  # type: ignore
+    for d, p in zip(direction, positions, strict=True):
         # As we do multiple swipes it's necessary to change the comparison
         # for triggering the sequencer table.
         # This is not the best way of doing it but will sufice for now
-        if counter == len(angle):
-            if direction == SeqTrigger.POSA_GT:
-                direction = SeqTrigger.POSA_LT
-            else:
-                direction = SeqTrigger.POSA_GT
-            counter = 0
+        # if counter == len(angle):
+        #     if direction == SeqTrigger.POSA_GT:
+        #         direction = SeqTrigger.POSA_LT
+        #     else:
+        #         direction = SeqTrigger.POSA_GT
+        #     counter = 0
 
         table += SeqTable.row(
             repeats=1,
-            trigger=direction,
+            trigger=d,
             position=p,
             time1=1,
             outa1=True,
@@ -572,7 +572,7 @@ def seq_non_linear(
             outb2=True,
         )
 
-        counter += 1
+        # counter += 1
 
     seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
