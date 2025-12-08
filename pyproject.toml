@@ -16,7 +16,7 @@ description = "Plans to use at spectroscopy beamlines at DLS"
 dependencies = [
     "bluesky",
     "ophyd",
-    "ophyd_async==0.13.5",
+    "ophyd_async==0.14.0",
     "pandas",
     "matplotlib",
     "databroker",
