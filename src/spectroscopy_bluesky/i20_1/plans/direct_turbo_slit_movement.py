@@ -41,20 +41,32 @@ from ophyd_async.plan_stubs import (
     retrieve_settings,
     store_settings,
 )
-from scanspec.specs import Fly, Line, Spec
+from scanspec.specs import Fly, Line
 
 from spectroscopy_bluesky.common.quantity_conversion import (
     energy_to_bragg_angle,
     si_111_lattice_spacing,
 )
 
+# Motor resolution used to conert between user position and motor encoder counts
 MRES = -1 / 10000
 
 # default offset count to be applied when converting user positions to encoder counts.
 ENCODER_OFFSET_COUNTS = 0
 
 
-def get_encoder_counts(user_position, offset=ENCODER_OFFSET_COUNTS):
+def get_encoder_counts(user_position: float, offset=ENCODER_OFFSET_COUNTS) -> float:
+    """Convert from user position to motor encoder counts
+    (using MRES global variable).
+
+    Args:
+        user_position : user position
+        offset (optional): Count offset to be added after the conversion.
+            Defaults to ENCODER_OFFSET_COUNTS (=0).
+
+    Returns:
+        motor encoder counts
+    """
     return user_position / MRES + offset
 
 
@@ -391,7 +403,6 @@ def trajectory_fly_scan(
     yield from inner_plan()
 
 
-# run_plan("seq_table", start=5, stop=10, num=11, duration=0.1, number_of_sweeps=2)
 def seq_table(
     start: float,
     stop: float,
@@ -408,7 +419,7 @@ def seq_table(
     positions = spec.frames().lower[motor]
 
     # Sequence table has position triggers for one back-and-forth sweep.
-    # Use with multiple repetitions of sequence table to capture subsequent sweeps.
+    # Use multiple repetitions of sequence table to capture subsequent sweeps.
     num_repeats = 1
     if number_of_sweeps > 2:
         positions = positions[: 2 * num_readouts]
@@ -454,6 +465,21 @@ def seq_non_linear(
 
 
 def create_seqtable(positions: NDArray, **kwargs) -> SeqTable:
+    """
+    Create SeqTable with rows setup to do position based triggering.
+
+    <li> Each position in positions NDArray is converted to a row of the sequence table.
+    <li> Position values are converted to encoder counts using
+        'get_encoder_counts' function.
+    <li> SeqTrigger direction set to GT or LT depending on when encoder values
+        increase or decrease.
+
+    :param positions: positions in user coordinates.
+    :param kwargs: additional kwargs to be used when generating each
+    row of sequence table (e.g. for setting trigger outputs, trigger length etc.)
+    :return: SeqTable
+    """
+
     # convert user positions to encoder positions
     enc_count_positions = [get_encoder_counts(x).astype(int) for x in positions]
 
@@ -465,7 +491,7 @@ def create_seqtable(positions: NDArray, **kwargs) -> SeqTable:
     direction.append(direction[-1])
 
     table = SeqTable()
-    for d, p in zip(direction, enc_count_positions, strict=False):
+    for d, p in zip(direction, enc_count_positions, strict=True):
         table += SeqTable.row(repeats=1, trigger=d, position=p, **kwargs)
     return table
 
