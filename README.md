@@ -7,7 +7,7 @@
 
 Plans to use at spectroscopy beamlines at DLS
 
-Currently the `scan_runner` tool is available to run some tests scans in I20-1's turbo slits.
+Currently the `scan_runner` tool is available to run some tests scans in p51's turbo slits.
 
 In order to run the scans you'll first need to install the repository into a virtual environment:
 
@@ -18,10 +18,10 @@ pip install --upgrade pip
 pip install -e .
 ```
 
-It's important to remember that due to network isolation, in order to run the scans you'll need to access a machine that's currently connected to I20-1's network. This can be done by:
+It's important to remember that due to network isolation, in order to run the scans you'll need to access a machine that's currently connected to p51's network. This can be done by:
 
 ```bash
-ssh i20-1-ws002
+ssh p51-ws002
 ```
 
 if you already have the environment installed you can just source otherwise you'll need to install it (steps above).

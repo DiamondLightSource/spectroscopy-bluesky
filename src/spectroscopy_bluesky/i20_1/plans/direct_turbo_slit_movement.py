@@ -7,7 +7,7 @@ import bluesky.preprocessors as bpp
 import numpy as np
 from aioca import caput
 from bluesky.utils import MsgGenerator
-from dodal.beamlines.i20_1 import turbo_slit_pmac
+from dodal.beamlines.p51 import turbo_slit_pmac
 from dodal.common.coordination import inject
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 from numpy.typing import NDArray
@@ -557,12 +557,12 @@ def seq_table_scan(
 
 
 def plan_store_settings(panda: HDFPanda, name: str):
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/i20_1/layouts")
+    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
     yield from store_settings(provider, name, panda)
 
 
 def plan_restore_settings(panda: HDFPanda, name: str):
     print(f"\nrestoring {name} layout\n")
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/i20_1/layouts")
+    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
     settings = yield from retrieve_settings(provider, name, panda)
     yield from apply_panda_settings(settings)
