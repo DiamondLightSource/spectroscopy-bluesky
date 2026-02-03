@@ -103,5 +103,5 @@ class DataSocket:
             return self.all_data[frame_index]
 
 
-panda_socket = DataSocket("bl20j-ts-panda-02", 8889)
+panda_socket = DataSocket("bl51p-ts-panda-02", 8889)
 panda_socket.connect()

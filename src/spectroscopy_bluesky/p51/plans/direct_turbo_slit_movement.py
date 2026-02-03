@@ -80,7 +80,7 @@ class _StaticPcompTriggerLogic(StaticPcompTriggerLogic):
         await wait_for_value(self.pcomp.active, True, timeout=1)
 
     async def prepare(self, value: PcompInfo) -> None:
-        await caput("BL20J-EA-PANDA-02:SRGATE1:FORCE_RST", "1", wait=True)
+        await caput("BL51P-EA-PANDA-02:SRGATE1:FORCE_RST", "1", wait=True)
         await asyncio.gather(
             self.pcomp.start.set(value.start_postion),
             self.pcomp.width.set(value.pulse_width),
@@ -119,7 +119,7 @@ def get_pcomp_info(width, start_pos, direction_of_sweep: PandaPcompDirection, nu
     return panda_pcomp_info
 
 
-def setup_trajectory_scan_pvs(prefix: str = "BL20J-MO-STEP-06"):
+def setup_trajectory_scan_pvs(prefix: str = "BL51P-MO-STEP-06"):
     """
     Set PV values on trajectory scan controller needed for scan to work
     (axis label to X, and profile name to PMAC6CS3)
