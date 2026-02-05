@@ -1,8 +1,8 @@
 from bluesky import RunEngine
-from dodal.beamlines.i20_1 import panda, turbo_slit
+from dodal.beamlines.p51 import panda, turbo_slit
 from ophyd_async.plan_stubs import ensure_connected
 
-from spectroscopy_bluesky.i20_1.plans.direct_turbo_slit_movement import (
+from spectroscopy_bluesky.p51.plans.direct_turbo_slit_movement import (
     trajectory_fly_scan,
 )
 
