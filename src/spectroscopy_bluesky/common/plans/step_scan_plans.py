@@ -20,13 +20,12 @@ def make_args(motor, scan_args, prefix=""):
         "steps" + prefix: int(scan_args[2]),
     }
 
-
 @attach_data_session_metadata_decorator()
 def step_scan(
     detectors: list[Readable],
     motor: Motor,
     scan_args: list[object],
-    metadata: Mapping[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     """
     Scan wrapping `bp.scan`
@@ -46,11 +45,10 @@ def step_scan(
             "*args": {k: repr(v) for k, v in args.items()},
         },
         "plan_name": "step_scan",
-        "shape": [1],
         **(metadata or {}),
     }
-    yield from bp.scan([*detectors], *args.values(), md=_md_)
 
+    yield from bp.scan([*detectors], *args.values(), md=_md_)
 
 @attach_data_session_metadata_decorator()
 def grid_scan(
@@ -83,7 +81,6 @@ def grid_scan(
             "*args2": {k: repr(v) for k, v in args2.items()},
         },
         "plan_name": "step_scan",
-        "shape": [1],
         **(metadata or {}),
     }
 
