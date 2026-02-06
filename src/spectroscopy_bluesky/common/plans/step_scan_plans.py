@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from typing import Any
-from data_session_directory import attach_data_directory_metadata_decorator
+from .data_session_directory import attach_data_directory_metadata_decorator
 import bluesky.plans as bp
 from bluesky.protocols import Readable
 from bluesky.utils import MsgGenerator
