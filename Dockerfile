@@ -1,6 +1,6 @@
 # The devcontainer should use the developer target and run as root with podman
 # or docker with user namespaces.
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.11@sha256:6b023894c26ea77c602814d8b682507e1f9dd731038e25f93381b488ca9e7176
 FROM python:${PYTHON_VERSION} AS developer
 
 # Add any system dependencies for the developer/build environment here
