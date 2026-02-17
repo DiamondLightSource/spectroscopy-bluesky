@@ -2,7 +2,7 @@ from bluesky import preprocessors as bpp
 from bluesky.utils import MsgGenerator, make_decorator
 
 DATA_DIRECTORY="data_session_directory"
-DATA_DIRECTORY_PATH="/dls/p51/data/2026/cm44254-1/tmp"
+DATA_DIRECTORY_PATH="/dls/p51/data/2026/cm44254-1"
 
 def set_data_directory_path(data_directory):
     global DATA_DIRECTORY_PATH
