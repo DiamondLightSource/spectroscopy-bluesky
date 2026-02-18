@@ -9,7 +9,6 @@ from aioca import caput
 from bluesky.utils import MsgGenerator
 from dodal.beamlines.p51 import turbo_slit_pmac
 from dodal.common.coordination import inject
-from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 from numpy.typing import NDArray
 from ophyd_async.core import (
     DetectorTrigger,
@@ -145,7 +144,6 @@ def fly_scan_ts(
 ) -> MsgGenerator:
     panda_pcomp = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
     def inner_plan():
@@ -227,7 +225,6 @@ def fly_sweep(
 
         yield from bps.complete_all(motor, panda_pcomp, wait=True)
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
     def inner_plan():
@@ -282,7 +279,6 @@ def fly_sweep_both_ways(
 
         yield from bps.complete_all(motor, panda_pcomp, wait=True)
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
     def inner_plan():
@@ -365,7 +361,6 @@ def trajectory_fly_scan(
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
     def inner_plan():
@@ -528,7 +523,6 @@ def seq_table_scan(
         deadtime=1e-5,
     )
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_seq])
     def inner_plan():
