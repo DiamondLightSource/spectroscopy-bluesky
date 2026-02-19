@@ -32,10 +32,10 @@ from ophyd_async.fastcs.panda import (
     SeqTrigger,
     StaticPcompTriggerLogic,
     StaticSeqTableTriggerLogic,
+    apply_panda_settings
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import (
-    apply_panda_settings,
     ensure_connected,
     retrieve_settings,
     store_settings,
