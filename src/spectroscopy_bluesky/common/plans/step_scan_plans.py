@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from typing import Any
-
+from .data_session_directory import attach_data_directory_metadata_decorator
 import bluesky.plans as bp
 from bluesky.protocols import Readable
 from bluesky.utils import MsgGenerator
@@ -21,6 +21,7 @@ def make_args(motor, scan_args, prefix=""):
     }
 
 
+@attach_data_directory_metadata_decorator()
 @attach_data_session_metadata_decorator()
 def step_scan(
     detectors: list[Readable],
@@ -52,6 +53,7 @@ def step_scan(
     yield from bp.scan([*detectors], *args.values(), md=_md_)
 
 
+@attach_data_directory_metadata_decorator()
 @attach_data_session_metadata_decorator()
 def grid_scan(
     detectors: list[Readable],
