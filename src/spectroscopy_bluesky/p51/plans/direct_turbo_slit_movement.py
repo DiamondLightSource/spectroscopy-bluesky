@@ -526,7 +526,7 @@ def seq_table_scan(
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_seq])
     def inner_plan():
-        yield from bps.declare_stream(panda, name="primary")
+        # yield from bps.declare_stream(panda, name="primary")
 
         # Prepare pmac with the trajectory
         yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
