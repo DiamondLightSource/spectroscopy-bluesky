@@ -32,10 +32,10 @@ from ophyd_async.fastcs.panda import (
     SeqTrigger,
     StaticPcompTriggerLogic,
     StaticSeqTableTriggerLogic,
+    apply_panda_settings,
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import (
-    apply_panda_settings,
     ensure_connected,
     retrieve_settings,
     store_settings,
@@ -167,7 +167,7 @@ def fly_scan_ts(
 
         panda_hdf_info = TriggerInfo(
             number_of_events=num,
-            trigger=DetectorTrigger.CONSTANT_GATE,
+            trigger=DetectorTrigger.EXTERNAL_LEVEL,
             livetime=duration,
             deadtime=1e-5,
         )
@@ -243,7 +243,7 @@ def fly_sweep(
 
     panda_hdf_info = TriggerInfo(
         number_of_events=num * number_of_sweeps,
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=duration,
         deadtime=1e-5,
     )
@@ -326,7 +326,7 @@ def fly_sweep_both_ways(
 
     panda_hdf_info = TriggerInfo(
         number_of_events=num * number_of_sweeps,
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=duration,
         deadtime=1e-5,
     )
@@ -349,7 +349,7 @@ def trajectory_fly_scan(
 
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
-    pmac = turbo_slit_pmac()
+    pmac = turbo_slit_pmac(motor)
 
     yield from ensure_connected(pmac, motor)
 
@@ -378,7 +378,7 @@ def trajectory_fly_scan(
 
         panda_hdf_info = TriggerInfo(
             number_of_events=num,
-            trigger=DetectorTrigger.CONSTANT_GATE,
+            trigger=DetectorTrigger.EXTERNAL_LEVEL,
             livetime=duration,
             deadtime=1e-5,
         )
@@ -494,14 +494,14 @@ def create_seqtable(positions: NDArray, **kwargs) -> SeqTable:
 def seq_table_scan(
     scan_spec: Fly,
     seq_table_info: SeqTableInfo,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda"),  # noqa: B008
     restore: bool = False,
 ) -> MsgGenerator:
     if restore:
         yield from plan_restore_settings(panda=panda, name="seq_table")
 
-    pmac = turbo_slit_pmac()
+    pmac = turbo_slit_pmac(motor)
 
     yield from ensure_connected(pmac, motor, panda)
 
@@ -518,7 +518,7 @@ def seq_table_scan(
         number_of_events=len(
             seq_table_info.sequence_table
         ),  # same as number of rows in sequence table
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=scan_spec.duration(),
         deadtime=1e-5,
     )
@@ -526,7 +526,6 @@ def seq_table_scan(
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_seq])
     def inner_plan():
-        yield from bps.declare_stream(panda, name="primary")
 
         # Prepare pmac with the trajectory
         yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
