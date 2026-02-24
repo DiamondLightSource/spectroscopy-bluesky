@@ -349,7 +349,7 @@ def trajectory_fly_scan(
 
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
-    pmac = turbo_slit_pmac()
+    pmac = turbo_slit_pmac(motor)
 
     yield from ensure_connected(pmac, motor)
 
@@ -494,14 +494,14 @@ def create_seqtable(positions: NDArray, **kwargs) -> SeqTable:
 def seq_table_scan(
     scan_spec: Fly,
     seq_table_info: SeqTableInfo,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),
+    panda: HDFPanda = inject("panda"),
     restore: bool = False,
 ) -> MsgGenerator:
     if restore:
         yield from plan_restore_settings(panda=panda, name="seq_table")
 
-    pmac = turbo_slit_pmac()
+    pmac = turbo_slit_pmac(motor)
 
     yield from ensure_connected(pmac, motor, panda)
 
