@@ -149,7 +149,7 @@ def wavelength_to_bragg_angle(
         NDArray|float|int: Bragg angle (radians or degrees, depending on return_radians)
     """
     val = wavelength_angstroms * angstrom / (2 * lattice_spacing)
-    if val > 1:
+    if val.any() > 1:
         raise Exception(
             f"Wavelength {wavelength_angstroms} Angstroms is too large for "
             "lattice spacing {lattice_spacing/angstrom} Angstroms!",

@@ -16,7 +16,6 @@ from ophyd_async.core import (
     FlyMotorInfo,
     StandardFlyer,
     TriggerInfo,
-    YamlSettingsProvider,
     wait_for_value,
 )
 from ophyd_async.epics.core import epics_signal_rw
@@ -36,10 +35,7 @@ from ophyd_async.fastcs.panda import (
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import (
-    apply_panda_settings,
     ensure_connected,
-    retrieve_settings,
-    store_settings,
 )
 from scanspec.specs import Fly, Line
 
@@ -347,10 +343,6 @@ def trajectory_fly_scan(
     panda: HDFPanda = inject("panda"),  # noqa: B008
     restore: bool = False,
 ) -> MsgGenerator:
-    # Start the plan by loading the saved design for this scan
-    if restore:
-        yield from plan_restore_settings(panda=panda, name="pcomp_auto_reset")
-
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
     pmac = turbo_slit_pmac()
@@ -420,16 +412,14 @@ def seq_table(
 
     # Sequence table has position triggers for one back-and-forth sweep.
     # Use multiple repetitions of sequence table to capture subsequent sweeps.
-    num_repeats = 1
-    if number_of_sweeps > 2:
-        positions = positions[: 2 * num_readouts]
-        num_repeats = mt.ceil(number_of_sweeps / 2)
+    # num_repeats = 1
+    # if number_of_sweeps > 1:
+    #     positions = positions[:num_readouts]
+    #     num_repeats = mt.ceil(number_of_sweeps / 2)
 
     table = create_seqtable(positions, time1=1, outa1=True, time2=1, outa2=False)
 
-    seq_table_info = SeqTableInfo(
-        sequence_table=table, repeats=num_repeats, prescale_as_us=1
-    )
+    seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
 
     yield from seq_table_scan(
         spec, seq_table_info, motor=motor, panda=panda, restore=restore
@@ -490,7 +480,7 @@ def create_seqtable(positions: NDArray, **kwargs) -> SeqTable:
     ]
     direction.append(direction[-1])
 
-    table = SeqTable()
+    table = SeqTable.empty()
     for d, p in zip(direction, enc_count_positions, strict=True):
         table += SeqTable.row(repeats=1, trigger=d, position=p, **kwargs)
     return table
@@ -503,10 +493,7 @@ def seq_table_scan(
     panda: HDFPanda,
     restore: bool = False,
 ) -> MsgGenerator:
-    if restore:
-        yield from plan_restore_settings(panda=panda, name="seq_table")
-
-    pmac = turbo_slit_pmac()
+    pmac = turbo_slit_pmac(turbo_slit_x=motor)
 
     yield from ensure_connected(pmac, motor, panda)
 
@@ -521,7 +508,7 @@ def seq_table_scan(
     # Prepare Panda file writer trigger info
     panda_hdf_info = TriggerInfo(
         number_of_events=len(
-            seq_table_info.sequence_table
+            scan_spec.frames().lower[motor]
         ),  # same as number of rows in sequence table
         trigger=DetectorTrigger.CONSTANT_GATE,
         livetime=scan_spec.duration(),
@@ -554,15 +541,3 @@ def seq_table_scan(
         )
 
     yield from inner_plan()
-
-
-def plan_store_settings(panda: HDFPanda, name: str):
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
-    yield from store_settings(provider, name, panda)
-
-
-def plan_restore_settings(panda: HDFPanda, name: str):
-    print(f"\nrestoring {name} layout\n")
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
-    settings = yield from retrieve_settings(provider, name, panda)
-    yield from apply_panda_settings(settings)
