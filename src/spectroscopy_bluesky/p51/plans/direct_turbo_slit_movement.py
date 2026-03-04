@@ -1,6 +1,5 @@
 import asyncio
 import math as mt
-from itertools import pairwise
 
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
@@ -10,7 +9,6 @@ from bluesky.utils import MsgGenerator
 from dodal.beamlines.p51 import turbo_slit_pmac
 from dodal.common.coordination import inject
 from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
-from numpy.typing import NDArray
 from ophyd_async.core import (
     DetectorTrigger,
     FlyMotorInfo,
@@ -28,15 +26,13 @@ from ophyd_async.fastcs.panda import (
     HDFPanda,
     PandaPcompDirection,
     PcompInfo,
-    SeqTable,
     SeqTableInfo,
-    SeqTrigger,
     StaticPcompTriggerLogic,
     StaticSeqTableTriggerLogic,
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import (
-    apply_panda_settings,
+    apply_settings,
     ensure_connected,
     retrieve_settings,
     store_settings,
@@ -47,6 +43,7 @@ from spectroscopy_bluesky.common.quantity_conversion import (
     energy_to_bragg_angle,
     si_111_lattice_spacing,
 )
+from spectroscopy_bluesky.p51.plans.sequence_table import SeqTableBuilder
 
 # Motor resolution used to conert between user position and motor encoder counts
 MRES = -1 / 10000
@@ -406,29 +403,50 @@ def trajectory_fly_scan(
 def seq_table(
     start: float,
     stop: float,
-    num_readouts: int,
-    duration: float,
+    stepsize: float,
+    time_per_point: float,
+    num_trajectory_points : int=10,
+    add_sweep_triggers: bool = False,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda"),  # noqa: B008
-    number_of_sweeps: int = 3,
+    number_of_sweeps: int = 4,
     restore: bool = False,
 ) -> MsgGenerator:
-    # Prepare motor info using trajectory scanning
-    spec = Fly(duration @ (number_of_sweeps * ~Line(motor, start, stop, num_readouts)))
 
-    positions = spec.frames().lower[motor]
+    num_seq_points = int((stop-start)/stepsize) + 1
+
+    time_per_traj_point = (num_seq_points/num_trajectory_points)*time_per_point
+    print(f"Num seq points : {num_seq_points}, time per traj point : {time_per_traj_point}")
+
+    # Prepare motor info using trajectory scanning
+    spec = Fly(time_per_traj_point @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points)))
+
+    # add points to capture positions on the reverse sweep
+    capture_positions = np.arange(start, stop+0.5*stepsize, stepsize)
+
+    if number_of_sweeps > 1:
+        num_captures = capture_positions.size
+        positions = np.zeros(2*num_captures)
+        positions[0:num_captures] = capture_positions
+        positions[num_captures:num_captures*2] = np.flip(capture_positions)
+    else :
+        positions = capture_positions
 
     # Sequence table has position triggers for one back-and-forth sweep.
     # Use multiple repetitions of sequence table to capture subsequent sweeps.
-    num_repeats = 1
-    if number_of_sweeps > 2:
-        positions = positions[: 2 * num_readouts]
-        num_repeats = mt.ceil(number_of_sweeps / 2)
+    num_seqtable_repeats = 1
+    if number_of_sweeps > 1:
+        num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
 
-    table = create_seqtable(positions, time1=1, outa1=True, time2=1, outa2=False)
+    builder = SeqTableBuilder()
+    builder.convert_to_encoder = get_encoder_counts
+    builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
+
+    if add_sweep_triggers:
+        builder.add_start_end_triggers("outb1", "outc1")
 
     seq_table_info = SeqTableInfo(
-        sequence_table=table, repeats=num_repeats, prescale_as_us=1
+        sequence_table=builder.get_seq_table(), repeats=num_seqtable_repeats, prescale_as_us=1
     )
 
     yield from seq_table_scan(
@@ -456,44 +474,30 @@ def seq_non_linear(
     # Prepare motor info using trajectory scanning
     spec = Fly(duration @ (Line(motor, angle[0], angle[-1], len(angle))))
 
-    table = create_seqtable(
-        angle, time1=1, time2=1, outa1=True, outb1=True, outa2=False, outb2=True
-    )
-    seq_table_info = SeqTableInfo(sequence_table=table, repeats=1, prescale_as_us=1)
+    builder = SeqTableBuilder()
+    builder.convert_to_encoder = get_encoder_counts
+    builder.add_positions(
+        angle,
+        get_encoder_counts,
+        time1=1,
+        time2=1,
+        outa1=True,
+        outb1=True,
+        outa2=False,
+        outb2=True)
+
+    seq_table_info = SeqTableInfo(sequence_table=builder.get_seq_table(), repeats=1, prescale_as_us=1)
 
     yield from seq_table_scan(spec, seq_table_info, motor, panda, restore=restore)
 
 
-def create_seqtable(positions: NDArray, **kwargs) -> SeqTable:
-    """
-    Create SeqTable with rows setup to do position based triggering.
-
-    <li> Each position in positions NDArray is converted to a row of the sequence table.
-    <li> Position values are converted to encoder counts using
-        'get_encoder_counts' function.
-    <li> SeqTrigger direction set to GT or LT depending on when encoder values
-        increase or decrease.
-
-    :param positions: positions in user coordinates.
-    :param kwargs: additional kwargs to be used when generating each
-    row of sequence table (e.g. for setting trigger outputs, trigger length etc.)
-    :return: SeqTable
-    """
-
-    # convert user positions to encoder positions
-    enc_count_positions = [get_encoder_counts(x).astype(int) for x in positions]
-
-    # determine direction of each segment
-    direction = [
-        SeqTrigger.POSA_GT if current < next else SeqTrigger.POSA_LT
-        for current, next in pairwise(enc_count_positions)
-    ]
-    direction.append(direction[-1])
-
-    table = SeqTable()
-    for d, p in zip(direction, enc_count_positions, strict=True):
-        table += SeqTable.row(repeats=1, trigger=d, position=p, **kwargs)
-    return table
+@bpp.run_decorator()
+def setup_seq_table(
+    seq_table_info: SeqTableInfo, panda: HDFPanda, seq_table_number: int = 1
+):
+    panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[seq_table_number]))
+    yield from bps.prepare(panda_seq, seq_table_info, wait=True)
+    yield from bps.kickoff(panda_seq, wait=True)
 
 
 def seq_table_scan(
@@ -523,7 +527,7 @@ def seq_table_scan(
         number_of_events=len(
             seq_table_info.sequence_table
         ),  # same as number of rows in sequence table
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=scan_spec.duration(),
         deadtime=1e-5,
     )
@@ -532,7 +536,7 @@ def seq_table_scan(
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_seq])
     def inner_plan():
-        yield from bps.declare_stream(panda, name="primary")
+        # yield from bps.declare_stream(panda, name="primary")
 
         # Prepare pmac with the trajectory
         yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
@@ -547,11 +551,11 @@ def seq_table_scan(
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
         yield from bps.complete_all(pmac_trajectory_flyer, panda_seq, panda, wait=True)
-        yield from bps.collect(
-            panda,
-            return_payload=True,
-            name="primary",
-        )
+        # yield from bps.collect(
+        #     panda,
+        #     return_payload=True,
+        #     name="primary",
+        # )
 
     yield from inner_plan()
 
@@ -565,4 +569,4 @@ def plan_restore_settings(panda: HDFPanda, name: str):
     print(f"\nrestoring {name} layout\n")
     provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
     settings = yield from retrieve_settings(provider, name, panda)
-    yield from apply_panda_settings(settings)
+    yield from apply_settings(settings)
