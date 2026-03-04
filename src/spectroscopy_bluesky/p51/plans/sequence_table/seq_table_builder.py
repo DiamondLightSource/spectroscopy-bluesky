@@ -24,7 +24,8 @@ class SeqTableBuilder:
     def add_start_end_triggers(
         self, start_trig="outb1", end_trig="outc1"
     ) -> SeqTableBuilder:
-        """Add start and end triggers to sequence table using :func:`~add_start_end_triggers`
+        """Add start and end triggers to sequence table
+        using :func:`~add_start_end_triggers`
 
         Args:
             start_trig (str, optional): _description_. Defaults to "outb1".
@@ -47,7 +48,7 @@ class SeqTableBuilder:
         return self.seq_table
 
 
-def add_start_end_triggers(table : SeqTable, start_trig="outb1", end_trig="outc1"):
+def add_start_end_triggers(table: SeqTable, start_trig="outb1", end_trig="outc1"):
     """Modify SeqTable rows to add triggers to mark start and end of each motor sweep.
     <li> Each change in trigger direction (e.g. POSA<POSITION to POSA>>POSITION)
     corresponds to end of one and start of next sweep
@@ -55,8 +56,10 @@ def add_start_end_triggers(table : SeqTable, start_trig="outb1", end_trig="outc1
 
     Args:
         table (SeqTable):The Sequence table to to be modified
-        start_trig (str) : output to be used for start of sweep trigger (outa1, outb2 etc)
-        end_trig (str) : output to be used for end of sweep trigger (outa1, outb2 etc)
+        start_trig (str) : output to be used for start of
+                        sweep trigger (outa1, outb2 etc)
+        end_trig (str) : output to be used for end of
+                        sweep trigger (outa1, outb2 etc)
 
     """
 
@@ -71,14 +74,14 @@ def add_start_end_triggers(table : SeqTable, start_trig="outb1", end_trig="outc1
 
     # first row is start of a sweep
     table_dict[start_trig][0] = True
-    for i in range(len(table)-1):
-        if table.trigger[i] != table.trigger[i+1] :
-            print(table.trigger[i], table.trigger[i+1])
+    for i in range(len(table) - 1):
+        if table.trigger[i] != table.trigger[i + 1]:
+            print(table.trigger[i], table.trigger[i + 1])
             # end of a sweep
             table_dict[end_trig][i] = True
 
             # start of next sweep
-            table_dict[start_trig][i+1] = True
+            table_dict[start_trig][i + 1] = True
     # assume last row is end of sweep
     table_dict[end_trig][-1] = True
 

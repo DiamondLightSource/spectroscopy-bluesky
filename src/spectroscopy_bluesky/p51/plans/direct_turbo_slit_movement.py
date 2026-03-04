@@ -405,31 +405,36 @@ def seq_table(
     stop: float,
     stepsize: float,
     time_per_point: float,
-    num_trajectory_points : int=10,
+    num_trajectory_points: int = 10,
     add_sweep_triggers: bool = False,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 4,
     restore: bool = False,
 ) -> MsgGenerator:
+    num_seq_points = int((stop - start) / stepsize) + 1
 
-    num_seq_points = int((stop-start)/stepsize) + 1
-
-    time_per_traj_point = (num_seq_points/num_trajectory_points)*time_per_point
-    print(f"Num seq points : {num_seq_points}, time per traj point : {time_per_traj_point}")
+    time_per_traj_point = (num_seq_points / num_trajectory_points) * time_per_point
+    print(
+        f"Num seq points : {num_seq_points}, "
+        f"time per traj point : {time_per_traj_point}"
+    )
 
     # Prepare motor info using trajectory scanning
-    spec = Fly(time_per_traj_point @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points)))
+    spec = Fly(
+        time_per_traj_point
+        @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
+    )
 
     # add points to capture positions on the reverse sweep
-    capture_positions = np.arange(start, stop+0.5*stepsize, stepsize)
+    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
     if number_of_sweeps > 1:
         num_captures = capture_positions.size
-        positions = np.zeros(2*num_captures)
+        positions = np.zeros(2 * num_captures)
         positions[0:num_captures] = capture_positions
-        positions[num_captures:num_captures*2] = np.flip(capture_positions)
-    else :
+        positions[num_captures : num_captures * 2] = np.flip(capture_positions)
+    else:
         positions = capture_positions
 
     # Sequence table has position triggers for one back-and-forth sweep.
@@ -446,7 +451,9 @@ def seq_table(
         builder.add_start_end_triggers("outb1", "outc1")
 
     seq_table_info = SeqTableInfo(
-        sequence_table=builder.get_seq_table(), repeats=num_seqtable_repeats, prescale_as_us=1
+        sequence_table=builder.get_seq_table(),
+        repeats=num_seqtable_repeats,
+        prescale_as_us=1,
     )
 
     yield from seq_table_scan(
@@ -484,9 +491,12 @@ def seq_non_linear(
         outa1=True,
         outb1=True,
         outa2=False,
-        outb2=True)
+        outb2=True,
+    )
 
-    seq_table_info = SeqTableInfo(sequence_table=builder.get_seq_table(), repeats=1, prescale_as_us=1)
+    seq_table_info = SeqTableInfo(
+        sequence_table=builder.get_seq_table(), repeats=1, prescale_as_us=1
+    )
 
     yield from seq_table_scan(spec, seq_table_info, motor, panda, restore=restore)
 

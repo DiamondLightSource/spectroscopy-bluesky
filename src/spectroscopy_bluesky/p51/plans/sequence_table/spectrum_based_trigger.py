@@ -18,8 +18,8 @@ class SpectrumBasedTrigger(BaseModel):
     output_num_repeats: int = 1
 
     # convert time from seconds to microseconds
-    def convert_time(self, float_time : float) :
-        return int(float_time*1e6)
+    def convert_time(self, float_time: float):
+        return int(float_time * 1e6)
 
     def to_row(self) -> SeqTable:
         trigger = (
@@ -37,12 +37,14 @@ class SpectrumBasedTrigger(BaseModel):
             wait_rows += delay_row
 
         # Add the row for the output trigger(s)
-        trigger_row = SeqTable.row(repeats=self.output_num_repeats, trigger=SeqTrigger.IMMEDIATE)
+        trigger_row = SeqTable.row(
+            repeats=self.output_num_repeats, trigger=SeqTrigger.IMMEDIATE
+        )
 
         # output pulse length(time1)
         trigger_row.time1[0] = self.convert_time(self.output_length)
 
-        # trigger outputs 
+        # trigger outputs
         outputs1 = [
             trigger_row.outa1,
             trigger_row.outb1,
@@ -55,10 +57,14 @@ class SpectrumBasedTrigger(BaseModel):
         # Set each outa1, outb1 etc to true/flase according to output_ports list
         # e.g. if output_ports = [1,3] => outa1=True, outb1=True
         for index, val in enumerate(outputs1):
-            if index+1 in self.output_ports:
+            if index + 1 in self.output_ports:
                 val[0] = [True]
 
-        return wait_rows+trigger_row
+        return wait_rows + trigger_row
 
-    def __init__(self, spectrum_number, output_ports=[], **kwargs):
-        super().__init__(spectrum_number=spectrum_number, output_ports=output_ports, **kwargs)
+    def __init__(self, spectrum_number, output_ports=None, **kwargs):
+        if output_ports is None:
+            output_ports = []
+        super().__init__(
+            spectrum_number=spectrum_number, output_ports=output_ports, **kwargs
+        )
