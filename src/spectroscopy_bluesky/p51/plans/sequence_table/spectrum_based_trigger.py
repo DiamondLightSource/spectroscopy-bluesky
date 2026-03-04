@@ -32,7 +32,7 @@ class SpectrumBasedTrigger(BaseModel):
 
         # add row for the output delay
         if self.output_delay > 0:
-            delay_row = SeqTable.row(repeates=1, trigger=SeqTrigger.IMMEDIATE)
+            delay_row = SeqTable.row(repeats=1, trigger=SeqTrigger.IMMEDIATE)
             delay_row.time1[0] = self.convert_time(self.output_delay)
             wait_rows += delay_row
 

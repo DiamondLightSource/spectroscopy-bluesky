@@ -166,7 +166,7 @@ def fly_scan_ts(
 
         panda_hdf_info = TriggerInfo(
             number_of_events=num,
-            trigger=DetectorTrigger.CONSTANT_GATE,
+            trigger=DetectorTrigger.EXTERNAL_LEVEL,
             livetime=duration,
             deadtime=1e-5,
         )
@@ -243,7 +243,7 @@ def fly_sweep(
 
     panda_hdf_info = TriggerInfo(
         number_of_events=num * number_of_sweeps,
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=duration,
         deadtime=1e-5,
     )
@@ -327,7 +327,7 @@ def fly_sweep_both_ways(
 
     panda_hdf_info = TriggerInfo(
         number_of_events=num * number_of_sweeps,
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=duration,
         deadtime=1e-5,
     )
@@ -380,7 +380,7 @@ def trajectory_fly_scan(
 
         panda_hdf_info = TriggerInfo(
             number_of_events=num,
-            trigger=DetectorTrigger.CONSTANT_GATE,
+            trigger=DetectorTrigger.EXTERNAL_LEVEL,
             livetime=duration,
             deadtime=1e-5,
         )
@@ -485,7 +485,6 @@ def seq_non_linear(
     builder.convert_to_encoder = get_encoder_counts
     builder.add_positions(
         angle,
-        get_encoder_counts,
         time1=1,
         time2=1,
         outa1=True,
@@ -538,7 +537,7 @@ def seq_table_scan(
             seq_table_info.sequence_table
         ),  # same as number of rows in sequence table
         trigger=DetectorTrigger.EXTERNAL_LEVEL,
-        livetime=scan_spec.duration(),
+        livetime=1e-5,
         deadtime=1e-5,
     )
 

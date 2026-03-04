@@ -1,6 +1,7 @@
 from __future__ import annotations  # enable forward declaration of types
 
 from collections.abc import Callable, Iterable
+from typing import Any
 from itertools import pairwise
 
 from numpy.typing import NDArray
@@ -10,12 +11,12 @@ from .spectrum_based_trigger import SpectrumBasedTrigger
 
 
 class SeqTableBuilder:
-    def __init__(self, seq_table: SeqTable = None):
-        if seq_table:
-            self.seq_table = seq_table
-        else:
-            self.seq_table = SeqTable()
-        self.convert_to_encoder = lambda x: -x * 10000
+    def __init__(self, seq_table: SeqTable | None = None):
+        if seq_table is None:
+            seq_table = SeqTable()
+        
+        self.seq_table : SeqTable = seq_table
+        self.convert_to_encoder : Callable[[Any], float] = lambda x: -x * 10000
 
     def add_positions(self, positions: NDArray, **kwargs) -> SeqTableBuilder:
         self.seq_table += create_seqtable(positions, self.convert_to_encoder, **kwargs)
@@ -88,7 +89,7 @@ def add_start_end_triggers(table: SeqTable, start_trig="outb1", end_trig="outc1"
 
 def create_seqtable(
     positions: Iterable[float],
-    convert_endcoder_counts: Callable[[float, ...], float],
+    convert_encoder_counts: Callable[[Any], float],
     **kwargs,
 ) -> SeqTable:
     """
@@ -107,7 +108,7 @@ def create_seqtable(
     """
 
     # convert user positions to encoder positions
-    enc_count_positions = [int(convert_endcoder_counts(x)) for x in positions]
+    enc_count_positions = [int(convert_encoder_counts(x)) for x in positions]
 
     # determine direction of each segment
     direction = [
