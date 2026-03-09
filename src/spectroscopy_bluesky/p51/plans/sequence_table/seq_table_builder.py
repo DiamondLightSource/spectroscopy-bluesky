@@ -1,8 +1,8 @@
 from __future__ import annotations  # enable forward declaration of types
 
 from collections.abc import Callable, Iterable
-from typing import Any
 from itertools import pairwise
+from typing import Any
 
 from numpy.typing import NDArray
 from ophyd_async.fastcs.panda import SeqTable, SeqTrigger
@@ -13,10 +13,10 @@ from .spectrum_based_trigger import SpectrumBasedTrigger
 class SeqTableBuilder:
     def __init__(self, seq_table: SeqTable | None = None):
         if seq_table is None:
-            seq_table = SeqTable()
-        
-        self.seq_table : SeqTable = seq_table
-        self.convert_to_encoder : Callable[[Any], float] = lambda x: -x * 10000
+            seq_table = SeqTable()  # type: ignore
+
+        self.seq_table: SeqTable = seq_table
+        self.convert_to_encoder: Callable[[Any], float] = lambda x: -x * 10000
 
     def add_positions(self, positions: NDArray, **kwargs) -> SeqTableBuilder:
         self.seq_table += create_seqtable(positions, self.convert_to_encoder, **kwargs)
@@ -117,7 +117,7 @@ def create_seqtable(
     ]
     direction.append(direction[-1])
 
-    table = SeqTable()
+    table = SeqTable()  # type: ignore
     for d, p in zip(direction, enc_count_positions, strict=True):
         table += SeqTable.row(repeats=1, trigger=d, position=p, **kwargs)
     return table
