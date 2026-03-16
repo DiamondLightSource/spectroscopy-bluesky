@@ -614,12 +614,16 @@ def plan_restore_dataset_settings(panda: HDFPanda, name: str):
 
 
 def plan_store_settings(panda: HDFPanda, name: str):
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
+    provider = YamlSettingsProvider(
+        "/workspace_git/spectroscopy_bluesky/src/spectroscopy_bluesky/p51/layouts"
+    )
     yield from store_settings(provider, name, panda)
 
 
 def plan_restore_settings(panda: HDFPanda, name: str):
     print(f"\nrestoring {name} layout\n")
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
+    provider = YamlSettingsProvider(
+        "/workspace_git/spectroscopy_bluesky/src/spectroscopy_bluesky/p51/layouts"
+    )
     settings = yield from retrieve_settings(provider, name, panda)
     yield from apply_panda_settings(settings)
