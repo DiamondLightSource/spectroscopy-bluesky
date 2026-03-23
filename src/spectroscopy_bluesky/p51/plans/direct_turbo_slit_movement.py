@@ -535,6 +535,17 @@ def setup_seq_table(
     yield from bps.kickoff(panda_seq, wait=True)
 
 
+def create_trigger_info(sti: SeqTableInfo) -> TriggerInfo:
+    return TriggerInfo(
+        number_of_events=len(
+            sti.sequence_table
+        ),  # same as number of rows in sequence table
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
+        livetime=1e-5,
+        deadtime=1e-5,
+    )
+
+
 def seq_table_scan(
     scan_spec: Fly,
     seq_table_info: list[SeqTableInfo],
@@ -549,17 +560,7 @@ def seq_table_scan(
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
-    def createTriggerInfo(index):
-        return TriggerInfo(
-            number_of_events=len(
-                seq_table_info[index].sequence_table
-            ),  # same as number of rows in sequence table
-            trigger=DetectorTrigger.EXTERNAL_LEVEL,
-            livetime=1e-5,
-            deadtime=1e-5,
-        )
-
-    trigger_info = [createTriggerInfo(index) for index, det in enumerate(detectors)]
+    trigger_info = [create_trigger_info(sti) for sti in seq_table_info]
 
     sequence_table = [
         StandardFlyer(StaticSeqTableTriggerLogic(det.seq[1])) for det in detectors
