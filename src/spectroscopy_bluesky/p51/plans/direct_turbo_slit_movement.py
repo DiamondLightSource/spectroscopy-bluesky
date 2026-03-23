@@ -8,7 +8,6 @@ from aioca import caput
 from bluesky.utils import MsgGenerator
 from dodal.beamlines.p51 import turbo_slit_pmac
 from dodal.common.coordination import inject
-from dodal.plan_stubs.data_session import attach_data_session_metadata_decorator
 from ophyd_async.core import (
     DetectorTrigger,
     FlyMotorInfo,
@@ -29,6 +28,7 @@ from ophyd_async.fastcs.panda import (
     SeqTableInfo,
     StaticPcompTriggerLogic,
     StaticSeqTableTriggerLogic,
+    apply_panda_settings,
 )
 from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import (
@@ -138,11 +138,10 @@ def fly_scan_ts(
     num: int,
     duration: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    panda: HDFPanda = inject("panda"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
 ) -> MsgGenerator:
     panda_pcomp = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
     def inner_plan():
@@ -166,18 +165,24 @@ def fly_scan_ts(
 
         panda_hdf_info = TriggerInfo(
             number_of_events=num,
-            trigger=DetectorTrigger.CONSTANT_GATE,
+            trigger=DetectorTrigger.EXTERNAL_LEVEL,
             livetime=duration,
             deadtime=1e-5,
         )
 
-        yield from bps.prepare(motor, motor_info)
-        yield from bps.prepare(panda, panda_hdf_info)
+        yield from bps.prepare(motor, motor_info, wait=True)
+        yield from bps.prepare(panda, panda_hdf_info, wait=True)
         yield from bps.prepare(panda_pcomp, panda_pcomp_info, wait=True)
-        yield from bps.kickoff(panda)
+        yield from bps.declare_stream(panda, name="primary", collect=True)
+        yield from bps.kickoff(panda, wait=True)
         yield from bps.kickoff(panda_pcomp, wait=True)
         yield from bps.kickoff(motor, wait=True)
-        yield from bps.complete_all(motor, panda_pcomp, panda, wait=True)
+        yield from bps.collect_while_completing(
+            flyers=[motor],
+            dets=[panda],
+            stream_name="primary",
+            flush_period=0.5,
+        )
 
     yield from inner_plan()
 
@@ -188,7 +193,7 @@ def fly_sweep(
     num: int,
     duration: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    panda: HDFPanda = inject("panda"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     number_of_sweeps: int = 5,
     runup: float = 0.0,
 ) -> MsgGenerator:
@@ -217,19 +222,25 @@ def fly_sweep(
 
         # prepare pcomp
         yield from bps.prepare(panda_pcomp, panda_pcomp_info, wait=True)
+
         yield from bps.kickoff(panda_pcomp, wait=True)
 
         # kickoff motor move once pcomp has started
         yield from bps.kickoff(motor, wait=True)
 
-        yield from bps.complete_all(motor, panda_pcomp, wait=True)
+        yield from bps.collect_while_completing(
+            flyers=[motor],
+            dets=[panda],
+            stream_name="primary",
+            flush_period=0.5,
+        )
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
     def inner_plan():
         # prepare panda and hdf writer once, at start of scan
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
+        yield from bps.declare_stream(panda, name="primary", collect=True)
         yield from bps.kickoff(panda, wait=True)
 
         for n in range(number_of_sweeps):
@@ -239,12 +250,10 @@ def fly_sweep(
             yield from inner_squared_plan(start2, stop2)
             print(f"Completed sweep {n}")
 
-        yield from bps.complete_all(panda, wait=True)
-
     panda_hdf_info = TriggerInfo(
         number_of_events=num * number_of_sweeps,
-        trigger=DetectorTrigger.CONSTANT_GATE,
-        livetime=duration,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
+        livetime=1e-5,
         deadtime=1e-5,
     )
 
@@ -257,7 +266,7 @@ def fly_sweep_both_ways(
     num: int,
     duration: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    panda: HDFPanda = inject("panda"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     number_of_sweeps: int = 5,
 ) -> MsgGenerator:
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
@@ -277,9 +286,13 @@ def fly_sweep_both_ways(
         # kickoff motor move once pcomp has started
         yield from bps.kickoff(motor, wait=True)
 
-        yield from bps.complete_all(motor, panda_pcomp, wait=True)
+        yield from bps.collect_while_completing(
+            flyers=[motor],
+            dets=[panda],
+            stream_name="primary",
+            flush_period=0.5,
+        )
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
     def inner_plan():
@@ -311,6 +324,8 @@ def fly_sweep_both_ways(
 
         # prepare panda and hdf writer once, at start of scan
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
+        yield from bps.declare_stream(panda, name="primary", collect=True)
+
         yield from bps.kickoff(panda, wait=True)
 
         for n in range(number_of_sweeps):
@@ -323,11 +338,9 @@ def fly_sweep_both_ways(
             yield from inner_squared_plan(start2, stop2, panda_pcomp)
             print(f"Completed sweep {n}")
 
-        yield from bps.complete_all(panda, wait=True)
-
     panda_hdf_info = TriggerInfo(
         number_of_events=num * number_of_sweeps,
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=duration,
         deadtime=1e-5,
     )
@@ -341,16 +354,11 @@ def trajectory_fly_scan(
     num: int,
     duration: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    panda: HDFPanda = inject("panda"),  # noqa: B008
-    restore: bool = False,
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
 ) -> MsgGenerator:
-    # Start the plan by loading the saved design for this scan
-    if restore:
-        yield from plan_restore_settings(panda=panda, name="pcomp_auto_reset")
-
     panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
     panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
-    pmac = turbo_slit_pmac()
+    pmac = turbo_slit_pmac(motor)
 
     yield from ensure_connected(pmac, motor)
 
@@ -362,7 +370,6 @@ def trajectory_fly_scan(
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
-    @attach_data_session_metadata_decorator()
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
     def inner_plan():
@@ -380,7 +387,7 @@ def trajectory_fly_scan(
 
         panda_hdf_info = TriggerInfo(
             number_of_events=num,
-            trigger=DetectorTrigger.CONSTANT_GATE,
+            trigger=DetectorTrigger.EXTERNAL_LEVEL,
             livetime=duration,
             deadtime=1e-5,
         )
@@ -392,12 +399,30 @@ def trajectory_fly_scan(
         # prepare panda and hdf writer once, at start of scan
         yield from bps.prepare(panda, panda_hdf_info, wait=True)
 
+        yield from bps.declare_stream(panda, name="primary", collect=True)
+
         yield from bps.kickoff(panda, wait=True)
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
-        yield from bps.complete_all(pmac_trajectory_flyer, panda, wait=True)
+        yield from bps.collect_while_completing(
+            flyers=[pmac_trajectory_flyer],
+            dets=[panda],
+            stream_name="primary",
+            flush_period=0.5,
+        )
 
     yield from inner_plan()
+
+
+def restore_panda_settings(
+    panda1: HDFPanda = inject("panda1"),  # noqa: B008
+    panda2: HDFPanda = inject("panda2"),  # noqa: B008
+    restoreAll: bool = False,
+) -> MsgGenerator:
+    if restoreAll:
+        yield from plan_restore_settings(panda=panda1, name="seq_table")
+    yield from plan_restore_dataset_settings(panda=panda1, name="seq_table")
+    yield from plan_restore_dataset_settings(panda=panda2, name="seq_table2")
 
 
 def seq_table(
@@ -405,12 +430,11 @@ def seq_table(
     stop: float,
     stepsize: float,
     time_per_point: float,
+    motor: Motor,  # noqa: B008
+    detectors: list[HDFPanda],  # noqa: B008
     num_trajectory_points: int = 10,
     add_sweep_triggers: bool = False,
-    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    panda: HDFPanda = inject("panda"),  # noqa: B008
     number_of_sweeps: int = 4,
-    restore: bool = False,
 ) -> MsgGenerator:
     num_seq_points = int((stop - start) / stepsize) + 1
 
@@ -437,27 +461,31 @@ def seq_table(
     else:
         positions = capture_positions
 
-    # Sequence table has position triggers for one back-and-forth sweep.
-    # Use multiple repetitions of sequence table to capture subsequent sweeps.
     num_seqtable_repeats = 1
     if number_of_sweeps > 1:
         num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
 
-    builder = SeqTableBuilder()
-    builder.convert_to_encoder = get_encoder_counts
-    builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
-
-    if add_sweep_triggers:
-        builder.add_start_end_triggers("outb1", "outc1")
-
-    seq_table_info = SeqTableInfo(
-        sequence_table=builder.get_seq_table(),
-        repeats=num_seqtable_repeats,
-        prescale_as_us=1,
-    )
+    seq_table_info = []
+    for dets in detectors:
+        if "panda1" in dets.name:
+            # Sequence table has position triggers for one back-and-forth sweep.
+            # Use multiple repetitions of sequence table to capture subsequent sweeps.
+            seqTabl1_builder = SeqTableBuilder()
+            seqTabl1_builder.convert_to_encoder = get_encoder_counts
+            seqTabl1_builder.add_positions(
+                positions, time1=1, outa1=True, time2=1, outa2=False
+            )
+            if add_sweep_triggers:
+                seqTabl1_builder.add_start_end_triggers("outb1", "outc1")
+            seqTable1_info = SeqTableInfo(
+                sequence_table=seqTabl1_builder.get_seq_table(),
+                repeats=num_seqtable_repeats,
+                prescale_as_us=1,
+            )
+            seq_table_info += [seqTable1_info]
 
     yield from seq_table_scan(
-        spec, seq_table_info, motor=motor, panda=panda, restore=restore
+        scan_spec=spec, seq_table_info=seq_table_info, motor=motor, detectors=detectors
     )
 
 
@@ -468,8 +496,7 @@ def seq_non_linear(
     de: float,
     duration: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    panda: HDFPanda = inject("panda"),  # noqa: B008
-    restore: bool = False,
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
 
@@ -497,10 +524,9 @@ def seq_non_linear(
         sequence_table=builder.get_seq_table(), repeats=1, prescale_as_us=1
     )
 
-    yield from seq_table_scan(spec, seq_table_info, motor, panda, restore=restore)
+    yield from seq_table_scan(spec, [seq_table_info], motor=motor, detectors=[panda])
 
 
-@bpp.run_decorator()
 def setup_seq_table(
     seq_table_info: SeqTableInfo, panda: HDFPanda, seq_table_number: int = 1
 ):
@@ -509,73 +535,102 @@ def setup_seq_table(
     yield from bps.kickoff(panda_seq, wait=True)
 
 
-def seq_table_scan(
-    scan_spec: Fly,
-    seq_table_info: SeqTableInfo,
-    motor: Motor,
-    panda: HDFPanda,
-    restore: bool = False,
-) -> MsgGenerator:
-    if restore:
-        yield from plan_restore_settings(panda=panda, name="seq_table")
-
-    pmac = turbo_slit_pmac()
-
-    yield from ensure_connected(pmac, motor, panda)
-
-    yield from setup_trajectory_scan_pvs()
-
-    # Defining the flyers and components of the scan
-    panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[1]))
-
-    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
-    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
-
-    # Prepare Panda file writer trigger info
-    panda_hdf_info = TriggerInfo(
+def create_trigger_info(sti: SeqTableInfo) -> TriggerInfo:
+    return TriggerInfo(
         number_of_events=len(
-            seq_table_info.sequence_table
+            sti.sequence_table
         ),  # same as number of rows in sequence table
-        trigger=DetectorTrigger.CONSTANT_GATE,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=1e-5,
         deadtime=1e-5,
     )
 
-    @attach_data_session_metadata_decorator()
+
+def seq_table_scan(
+    scan_spec: Fly,
+    seq_table_info: list[SeqTableInfo],
+    motor: Motor,  # noqa: B008
+    detectors: list[HDFPanda],  # noqa: B008
+) -> MsgGenerator:
+    pmac = turbo_slit_pmac(motor)
+
+    yield from ensure_connected(pmac, motor)
+    for detector in detectors:
+        yield from ensure_connected(detector)
+    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
+
+    trigger_info = [create_trigger_info(sti) for sti in seq_table_info]
+
+    sequence_table = [
+        StandardFlyer(StaticSeqTableTriggerLogic(det.seq[1])) for det in detectors
+    ]
+
+    yield from setup_trajectory_scan_pvs()
+
+    @bpp.stage_decorator([*detectors])
     @bpp.run_decorator()
-    @bpp.stage_decorator([panda, panda_seq])
     def inner_plan():
-        # yield from bps.declare_stream(panda, name="primary")
 
         # Prepare pmac with the trajectory
         yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
-        # prepare sequencer table
-        yield from bps.prepare(panda_seq, seq_table_info, wait=True)
-        # prepare panda and hdf writer once, at start of scan
-        yield from bps.prepare(panda, panda_hdf_info, wait=True)
 
-        # kickoff devices waiting for all of them
-        yield from bps.kickoff(panda, wait=True)
-        yield from bps.kickoff(panda_seq, wait=True)
+        # prepare panda and sequencer table
+        for index, detector in enumerate(detectors):
+            yield from bps.prepare(detector, trigger_info[index], wait=True)
+            yield from bps.prepare(
+                sequence_table[index], seq_table_info[index], wait=True
+            )
+
+        yield from bps.declare_stream(*detectors, name="primary", collect=True)
+
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
-        yield from bps.complete_all(pmac_trajectory_flyer, panda_seq, panda, wait=True)
-        # yield from bps.collect(
-        #     panda,
-        #     return_payload=True,
-        #     name="primary",
-        # )
+        # kickoff panda and sequence tables waiting for all of them
+        for index, detector in enumerate(detectors):
+            yield from bps.kickoff(sequence_table[index], wait=True)
+            yield from bps.kickoff(detector, wait=True)
+
+        yield from bps.collect_while_completing(
+            flyers=[pmac_trajectory_flyer],
+            dets=[*detectors],
+            stream_name="primary",
+            flush_period=0.5,
+        )
 
     yield from inner_plan()
 
 
+def plan_restore_dataset_settings(panda: HDFPanda, name: str):
+    """Apply dataset settings to a panda device."""
+    provider = YamlSettingsProvider(
+        "/workspace_git/spectroscopy_bluesky/src/spectroscopy_bluesky/p51/layouts"
+    )
+    settings = yield from retrieve_settings(provider, name, panda)
+    dataset, others = settings.partition(
+        lambda signal: (
+            signal.name.endswith("_dataset")
+            and any(k in signal.name for k in ["out", "val", "pos"])
+        )
+    )
+    new_dataset = {
+        signal: (value if value else signal.name.replace(".", "_"))
+        for signal, value in dataset.items()
+    }
+    yield from apply_settings(new_dataset)
+
+
 def plan_store_settings(panda: HDFPanda, name: str):
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
+    provider = YamlSettingsProvider(
+        "/workspace_git/spectroscopy_bluesky/src/spectroscopy_bluesky/p51/layouts"
+    )
     yield from store_settings(provider, name, panda)
 
 
 def plan_restore_settings(panda: HDFPanda, name: str):
     print(f"\nrestoring {name} layout\n")
-    provider = YamlSettingsProvider("./src/spectroscopy_bluesky/p51/layouts")
+    provider = YamlSettingsProvider(
+        "/workspace_git/spectroscopy_bluesky/src/spectroscopy_bluesky/p51/layouts"
+    )
     settings = yield from retrieve_settings(provider, name, panda)
-    yield from apply_settings(settings)
+    yield from apply_panda_settings(settings)
