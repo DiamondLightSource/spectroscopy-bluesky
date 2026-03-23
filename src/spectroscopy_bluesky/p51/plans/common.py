@@ -1,6 +1,5 @@
 import bluesky.plan_stubs as bps
 from bluesky.utils import MsgGenerator
-from dodal.common.coordination import inject
 from ophyd_async.core import (
     YamlSettingsProvider,
 )
@@ -55,14 +54,23 @@ def setup_trajectory_scan_pvs(prefix: str = "BL51P-MO-STEP-06"):
 
 
 def restore_panda_settings(
-    panda1: HDFPanda = inject("panda1"),  # noqa: B008
-    panda2: HDFPanda = inject("panda2"),  # noqa: B008
-    restoreAll: bool = False,
+    detectors: list[HDFPanda],
+    restore_settings: bool = False,
+    restore_dataset_settings: bool = False,
+    store_settings: bool = False,
 ) -> MsgGenerator:
-    if restoreAll:
-        yield from plan_restore_settings(panda=panda1, name="seq_table")
-    yield from plan_restore_dataset_settings(panda=panda1, name="seq_table")
-    yield from plan_restore_dataset_settings(panda=panda2, name="seq_table2")
+
+    for dets in detectors:
+        if restore_settings:
+            yield from plan_restore_settings(panda=dets, name=f"seq_table_{dets.name}")
+
+        if restore_dataset_settings:
+            yield from plan_restore_dataset_settings(
+                panda=dets, name=f"seq_table_{dets.name}"
+            )
+
+        if store_settings:
+            yield from plan_store_settings(panda=dets, name=f"seq_table_{dets.name}")
 
 
 def plan_store_settings(panda: HDFPanda, name: str):
