@@ -143,7 +143,7 @@ def seq_table(
             # Test for two sequence table
             for i in range(2):
                 # Sequence table has position triggers for one back-and-forth sweep.
-                # Use multiple repetitions of se table to capture subsequent sweeps.
+                # Use multiple repetitions of seq table to capture subsequent sweeps.
                 seqTable_builder = SeqTableBuilder()
                 seqTable_builder.convert_to_encoder = get_encoder_counts
                 seqTable_builder.add_positions(
@@ -221,13 +221,11 @@ def setup_seq_table(
 
 def seq_table_scan(
     scan_spec: Fly,
-    detector_dict: dict[PandaScanConfig],
+    detector_dict: dict[HDFPanda, PandaScanConfig],
     motor: Motor,  # noqa: B008
     detectors: list[HDFPanda],  # noqa: B008
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
-
-    print(type(detector_dict))
 
     yield from ensure_connected(pmac, motor)
     for detector in detectors:
