@@ -139,15 +139,14 @@ def seq_table(
     detector_dict = {}
     for dets in detectors:
         detector_dict[dets] = PandaScanConfig()
-        if "panda1" in dets.name:
-            # Test for two sequence table
-            for i in range(2):
+        match dets.name:
+            case "panda1":
                 # Sequence table has position triggers for one back-and-forth sweep.
                 # Use multiple repetitions of seq table to capture subsequent sweeps.
                 seqTable_builder = SeqTableBuilder()
                 seqTable_builder.convert_to_encoder = get_encoder_counts
                 seqTable_builder.add_positions(
-                    positions, time1=i + 1, outa1=True, time2=i + 1, outa2=False
+                    positions, time1=1, outa1=True, time2=1, outa2=False
                 )
                 if add_sweep_triggers:
                     seqTable_builder.add_start_end_triggers("outb1", "outc1")
@@ -157,14 +156,17 @@ def seq_table(
                     num_seqtable_repeats=num_seqtable_repeats,
                 )
 
-        if "panda2" in dets.name:
-            triggers = generate_test_triggers()
-            seqTable_builder = SeqTableBuilder().add_spectrum_based_triggers(triggers)
-            detector_dict[dets].create_sequence_table_info(
-                seq_table_builder=seqTable_builder,
-                num_seqtable_repeats=num_seqtable_repeats,
-            )
+            case "panda2":
+                triggers = generate_test_triggers()
+                seqTable_builder = SeqTableBuilder().add_spectrum_based_triggers(triggers)
+                detector_dict[dets].create_sequence_table_info(
+                    seq_table_builder=seqTable_builder,
+                    num_seqtable_repeats=num_seqtable_repeats,
+                )
 
+            case _:
+                raise ValueError(f"{dets.name} is not a valid PandA for scanning")
+            
     yield from seq_table_scan(
         scan_spec=spec, detector_dict=detector_dict, motor=motor, detectors=detectors
     )
@@ -258,13 +260,13 @@ def seq_table_scan(
 
         yield from bps.declare_stream(*detectors, name="primary", collect=True)
 
-        yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
-
         # kickoff panda and sequence table
         for panda, config in detector_dict.items():
             yield from bps.kickoff(panda, wait=True)
             for seq_table in config.sequence_table:
                 yield from bps.kickoff(seq_table, wait=True)
+
+        yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
         yield from bps.collect_while_completing(
             flyers=[pmac_trajectory_flyer],
