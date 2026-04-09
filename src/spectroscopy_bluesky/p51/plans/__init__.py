@@ -6,6 +6,7 @@ from .seq_table_scans import (
     seq_non_linear,
     seq_table,
     setup_seq_table,
+    xas_scan,
 )
 from .turbo_slit_fly_scans import (
     fly_scan_ts,
@@ -24,4 +25,5 @@ __all__ = [
     "setup_seq_table",
     "restore_panda_settings",
     "plan_store_settings",
+    "xas_scan",
 ]
