@@ -1,15 +1,19 @@
+from pathlib import PurePath
+
 from bluesky.run_engine import RunEngine
 from bluesky.utils import MsgGenerator
-from dodal.beamlines.p51 import panda, turbo_slit_pmac, turbo_slit_x
-from ophyd_async.fastcs.panda import HDFPanda, SeqTableInfo
+from dodal.beamlines.p51 import (
+    panda1,
+    turbo_slit_pmac,
+    turbo_slit_x,
+)
+from ophyd_async.core import PathProvider, StaticFilenameProvider, StaticPathProvider
 from ophyd_async.plan_stubs import ensure_connected
 
 from spectroscopy_bluesky.p51.plans import (
-    seq_table,
-    setup_seq_table,
+    seq_table_uniform_scan,
 )
 from spectroscopy_bluesky.p51.plans.sequence_table import (
-    SeqTableBuilder,
     SpectrumBasedTrigger,
     SpectrumTriggerType,
 )
@@ -38,51 +42,37 @@ def generate_test_triggers() -> list[SpectrumBasedTrigger]:
     ]
 
 
+def static_panda_path_provider() -> PathProvider:
+    return StaticPathProvider(
+        StaticFilenameProvider("panda.h5"),
+        PurePath("/dls/p51/data/2026/cm44254-2/tmp/"),
+    )
+
+
 RE = RunEngine()
-p = panda()
+path_provider = static_panda_path_provider()
+
+p = panda1(path_provider)
 ts = turbo_slit_x()
-pmac = turbo_slit_pmac()
+pmac = turbo_slit_pmac(ts)
 
 RE(ensure_connected(p, ts, pmac))
-
-panda_triggers = generate_test_triggers()
-
-
-def setup_seq_table_spectrum_triggers(
-    triggers: list[SpectrumBasedTrigger], panda: HDFPanda, seq_table_number: int
-) -> MsgGenerator:
-    """Setup sequence table using list of SpectrumBasedTriggers
-
-    Args:
-        triggers (list[SpectrumBasedTrigger]):
-        panda (HDFPanda):
-        seq_table_number (int): sequence table number on Panda to be setup
-        (usually either 1 or 2)
-
-    Returns:
-        MsgGenerator:
-
-    Yields:
-        Iterator[MsgGenerator]:
-    """
-    seq_table = SeqTableBuilder().add_spectrum_based_triggers(triggers).get_seq_table()
-    seq_table_info = SeqTableInfo(sequence_table=seq_table, repeats=1, prescale_as_us=1)
-    yield from setup_seq_table(seq_table_info, panda, seq_table_number)
 
 
 def two_seq_tables_plan() -> MsgGenerator:
     # setup and enable the 2nd sequence table, ready to receive triggers
     # from the 1st sequence table.
-    yield from setup_seq_table_spectrum_triggers(panda_triggers, p, 2)
+    # yield from setup_seq_table_spectrum_triggers(panda_triggers, p, 2)
 
-    yield from seq_table(
+    yield from seq_table_uniform_scan(
         0,
-        10,
+        5,
         1.0,
-        1.0,
+        5.0,
         num_trajectory_points=10,
         number_of_sweeps=6,
         add_sweep_triggers=True,
+        spectrum_triggers=generate_test_triggers(),
         motor=ts,
         panda=p,
     )

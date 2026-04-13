@@ -1,8 +1,9 @@
-import math as mt
+import math as mt  # noqa: I001
 
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
 import numpy as np
+from numpy.typing import NDArray
 from bluesky.utils import MsgGenerator
 from dodal.beamlines.p51 import turbo_slit_pmac
 from dodal.common.coordination import inject
@@ -17,20 +18,22 @@ from ophyd_async.epics.pmac import (
 )
 from ophyd_async.fastcs.panda import (
     HDFPanda,
+    SeqTable,
     SeqTableInfo,
     StaticSeqTableTriggerLogic,
 )
 from ophyd_async.plan_stubs import ensure_connected
 from scanspec.specs import Fly, Line
+from collections.abc import Callable
 
 from spectroscopy_bluesky.common.quantity_conversion import (
-    energy_to_bragg_angle,
     si_111_lattice_spacing,
+    energy_to_bragg_angle,
 )
+
 from spectroscopy_bluesky.p51.plans.sequence_table import (
     SeqTableBuilder,
     SpectrumBasedTrigger,
-    SpectrumTriggerType,
 )
 
 from .common import (
@@ -39,79 +42,146 @@ from .common import (
 )
 
 
-def generate_test_triggers() -> list[SpectrumBasedTrigger]:
-    return [
-        SpectrumBasedTrigger(
-            1,
-            output_length=0.00002,
-            trigger_type=SpectrumTriggerType.START,
-            output_ports=[2],
-        ),
-        SpectrumBasedTrigger(
-            1,
-            output_length=0.00002,
-            trigger_type=SpectrumTriggerType.END,
-            output_ports=[3],
-        ),
-        SpectrumBasedTrigger(
-            1,
-            output_length=0.00002,
-            trigger_type=SpectrumTriggerType.END,
-            output_ports=[5],
-        ),
-    ]
+def prepare_seq_table(
+    panda: HDFPanda,
+    seq_table: SeqTable,
+    seq_table_number: int = 1,
+    num_repeats: int = 1,
+    prescale_as_us: float = 1,
+    prepare_panda: bool = True,
+) -> Callable[[], MsgGenerator]:
+    """Return a function that can be used to prepare and arm (kickoff) a
+    panda sequence table
+
+    Args:
+        panda (HDFPanda): Panda object to be operated on
+        seq_table (SeqTable): Sequence table settings to be applied
+        seq_table_number (int): Number of sequence table settings should be applied to.
+                                Defaults to 1.
+        num_repeats (int, optional): Number of repeats of sequence table. Defaults to 1.
+        prescale_as_us (float, optional): _description_. Defaults to 1.
+        prepare_panda (bool, optional): If true, add calls to also arm the panda as well
+        as the sequence table. Defaults to True.
+
+    Returns:
+        Callable[[], MsgGenerator]: _description_
+
+    Yields:
+        Iterator[Callable[[], MsgGenerator]]: _description_
+    """
+
+    seq_table_info = SeqTableInfo(
+        sequence_table=seq_table, repeats=num_repeats, prescale_as_us=prescale_as_us
+    )
+
+    seqtable_flyer = StandardFlyer(
+        StaticSeqTableTriggerLogic(panda.seq[seq_table_number])
+    )
+
+    trigger_info = TriggerInfo(
+        number_of_events=len(seq_table),
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
+        livetime=1e-5,
+        deadtime=1e-5,
+    )
+
+    def inner_plan():
+        if prepare_panda:
+            yield from bps.prepare(panda, trigger_info)
+        yield from bps.prepare(seqtable_flyer, seq_table_info, wait=True)
+
+        yield from bps.kickoff(seqtable_flyer)
+        # panda is kicked off later - in seq_table_scan
+
+    return inner_plan
 
 
-class PandaScanConfig:
-    def __init__(self):
-        self.seq_table_info = []
-        self.trigger_info = []
-        self.sequence_table = []
+def seq_table_non_linear(
+    ei: float,
+    ef: float,
+    de: float,
+    time_per_sweep: float,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
+) -> MsgGenerator:
+    # Start the plan by loading the saved design for this scan
 
-    def create_trigger_info(self, sti: SeqTableInfo):
-        trigger_info = TriggerInfo(
-            number_of_events=len(
-                sti.sequence_table
-            ),  # same as number of rows in sequence table
-            trigger=DetectorTrigger.EXTERNAL_LEVEL,
-            livetime=1e-5,
-            deadtime=1e-5,
-        )
-        self.trigger_info.append(trigger_info)
+    energies = np.arange(ei, ef + de, de)  # include Ef as last point in the array
+    print(f"param\nEi = {ei}, Ef = {ef}, dE = {de}\n")
 
-    def create_sequence_table(self, panda: HDFPanda, seq_table_number: int = 1):
-        sequence_table = StandardFlyer(
-            StaticSeqTableTriggerLogic(panda.seq[seq_table_number])
-        )
-        self.sequence_table.append(sequence_table)
+    angle = energy_to_bragg_angle(si_111_lattice_spacing, energies)
 
-    def create_sequence_table_info(
-        self, seq_table_builder: SeqTableBuilder, num_seqtable_repeats: int = 1
-    ):
-        seqTable_info = SeqTableInfo(
-            sequence_table=seq_table_builder.get_seq_table(),
-            repeats=num_seqtable_repeats,
-            prescale_as_us=1,
-        )
-        self.seq_table_info.append(seqTable_info)
+    yield from seq_table_position_scan(
+        angle[0],
+        angle[-1],
+        time_per_sweep,
+        angle,
+        motor,
+        panda,
+        number_of_sweeps=1,
+    )
 
 
-def seq_table(
+def seq_table_uniform_scan(
     start: float,
     stop: float,
     stepsize: float,
-    time_per_point: float,
+    time_per_sweep: float,
     motor: Motor,  # noqa: B008
-    detectors: list[HDFPanda],  # noqa: B008
+    panda: HDFPanda,  # noqa: B008
     num_trajectory_points: int = 10,
+    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
 ) -> MsgGenerator:
-    num_seq_points = int((stop - start) / stepsize) + 1
 
-    time_per_traj_point = (num_seq_points / num_trajectory_points) * time_per_point
+    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+
+    # setup a second seq table for 'spectrum based' triggering :
+    panda_dict = {}
+    if spectrum_triggers is not None:
+        seq_table = (
+            SeqTableBuilder()
+            .add_spectrum_based_triggers(spectrum_triggers)
+            .get_seq_table()
+        )
+
+        prepare_triggers_seqtable = prepare_seq_table(
+            panda, seq_table, 2, prepare_panda=False
+        )
+        panda_dict[panda] = [prepare_triggers_seqtable]
+
+    yield from seq_table_position_scan(
+        start,
+        stop,
+        time_per_sweep,
+        capture_positions,
+        motor=motor,
+        panda=panda,
+        num_trajectory_points=num_trajectory_points,
+        add_sweep_triggers=add_sweep_triggers,
+        number_of_sweeps=number_of_sweeps,
+        panda_dict=panda_dict,
+    )
+
+
+def seq_table_position_scan(
+    start: float,
+    stop: float,
+    time_per_sweep: float,
+    capture_positions: NDArray,
+    motor: Motor,  # noqa: B008
+    panda: HDFPanda,  # noqa: B008
+    num_trajectory_points: int = 10,
+    add_sweep_triggers: bool = False,
+    number_of_sweeps: int = 4,
+    panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+) -> MsgGenerator:
+
+    time_per_traj_point = time_per_sweep / num_trajectory_points
+
     print(
-        f"Num seq points : {num_seq_points}, "
+        f"Num trajectorypoints : {num_trajectory_points}, "
         f"time per traj point : {time_per_traj_point}"
     )
 
@@ -122,8 +192,6 @@ def seq_table(
     )
 
     # add points to capture positions on the reverse sweep
-    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
-
     if number_of_sweeps > 1:
         num_captures = capture_positions.size
         positions = np.zeros(2 * num_captures)
@@ -136,136 +204,60 @@ def seq_table(
     if number_of_sweeps > 1:
         num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
 
-    detector_dict = {}
-    for dets in detectors:
-        detector_dict[dets] = PandaScanConfig()
-        match dets.name:
-            case "panda1":
-                # Sequence table has position triggers for one back-and-forth sweep.
-                # Use multiple repetitions of seq table to capture subsequent sweeps.
-                seqTable_builder = SeqTableBuilder()
-                seqTable_builder.convert_to_encoder = get_encoder_counts
-                seqTable_builder.add_positions(
-                    positions, time1=1, outa1=True, time2=1, outa2=False
-                )
-                if add_sweep_triggers:
-                    seqTable_builder.add_start_end_triggers("outb1", "outc1")
-
-                detector_dict[dets].create_sequence_table_info(
-                    seq_table_builder=seqTable_builder,
-                    num_seqtable_repeats=num_seqtable_repeats,
-                )
-
-            case "panda2":
-                triggers = generate_test_triggers()
-                seqTable_builder = SeqTableBuilder().add_spectrum_based_triggers(triggers)
-                detector_dict[dets].create_sequence_table_info(
-                    seq_table_builder=seqTable_builder,
-                    num_seqtable_repeats=num_seqtable_repeats,
-                )
-
-            case _:
-                raise ValueError(f"{dets.name} is not a valid PandA for scanning")
-            
-    yield from seq_table_scan(
-        scan_spec=spec, detector_dict=detector_dict, motor=motor, detectors=detectors
-    )
-
-
-# run_plan("seq_non_linear", ei=6000.0, ef=10000.0, de=100.0, duration=0.1)
-def seq_non_linear(
-    ei: float,
-    ef: float,
-    de: float,
-    duration: float,
-    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    panda: HDFPanda = inject("panda1"),  # noqa: B008
-) -> MsgGenerator:
-    # Start the plan by loading the saved design for this scan
-
-    energies = np.arange(ei, ef + de, de)  # include Ef as last point in the array
-    print(f"param\nEi = {ei}, Ef = {ef}, dE = {de}\n")
-
-    angle = energy_to_bragg_angle(si_111_lattice_spacing, energies)
-
-    # Prepare motor info using trajectory scanning
-    spec = Fly(duration @ (Line(motor, angle[0], angle[-1], len(angle))))
-
+    # Sequence table has position triggers for one back-and-forth sweep.
+    # Use multiple repetitions of seq table to capture subsequent sweeps.
     seqTable_builder = SeqTableBuilder()
     seqTable_builder.convert_to_encoder = get_encoder_counts
-    seqTable_builder.add_positions(
-        angle,
-        time1=1,
-        time2=1,
-        outa1=True,
-        outb1=True,
-        outa2=False,
-        outb2=True,
+    seqTable_builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
+    if add_sweep_triggers:
+        seqTable_builder.add_start_end_triggers("outb1", "outc1")
+
+    # initialise if nothing has been passed in
+    if panda_dict is None:
+        panda_dict = {}
+
+    prepare_position_seqtable = prepare_seq_table(
+        panda, seqTable_builder.get_seq_table(), 1, num_seqtable_repeats
     )
-    detector_dict = {}
-    detector_dict[panda] = PandaScanConfig()
+    # append position sequence table setup to panda entry (make empty list first
+    # if not already present).
+    panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
-    detector_dict[panda].create_sequence_table_info(
-        seq_table_builder=seqTable_builder,
-        num_seqtable_repeats=1,
-    )
-
-    yield from seq_table_scan(spec, detector_dict, motor=motor, detectors=[panda])
-
-
-def setup_seq_table(
-    seq_table_info: SeqTableInfo, panda: HDFPanda, seq_table_number: int = 1
-):
-    panda_seq = StandardFlyer(StaticSeqTableTriggerLogic(panda.seq[seq_table_number]))
-    yield from bps.prepare(panda_seq, seq_table_info, wait=True)
-    yield from bps.kickoff(panda_seq, wait=True)
+    yield from seq_table_scan(spec, panda_dict, motor=motor)
 
 
 def seq_table_scan(
     scan_spec: Fly,
-    detector_dict: dict[HDFPanda, PandaScanConfig],
+    panda_dict: dict[
+        HDFPanda, list[Callable[[], MsgGenerator]]
+    ],  # dict containing functions to prepare each panda
     motor: Motor,  # noqa: B008
-    detectors: list[HDFPanda],  # noqa: B008
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
 
     yield from ensure_connected(pmac, motor)
+    yield from setup_trajectory_scan_pvs()
+
+    detectors = panda_dict.keys()
     for detector in detectors:
         yield from ensure_connected(detector)
+
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
-    for panda, config in detector_dict.items():
-        for index, val in enumerate(config.seq_table_info):
-            detector_dict[panda].create_trigger_info(val)
-            detector_dict[panda].create_sequence_table(
-                panda=panda, seq_table_number=index + 1
-            )
-
-    yield from setup_trajectory_scan_pvs()
 
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator()
     def inner_plan():
+        # prepare and kickoff panda seq tables
+        for panda, preparer_funcs in panda_dict.items():
+            for prepare in preparer_funcs:
+                yield from prepare()
+            yield from bps.kickoff(panda)
+
+        yield from bps.declare_stream(*detectors, name="primary", collect=False)
+
         # Prepare pmac with the trajectory
         yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
-
-        # prepare panda and sequencer table
-        for panda, config in detector_dict.items():
-            for trigger_info in config.trigger_info:
-                yield from bps.prepare(panda, trigger_info, wait=True)
-            for seq_table, seq_info in zip(
-                config.sequence_table, config.seq_table_info, strict=True
-            ):
-                yield from bps.prepare(seq_table, seq_info, wait=True)
-
-        yield from bps.declare_stream(*detectors, name="primary", collect=True)
-
-        # kickoff panda and sequence table
-        for panda, config in detector_dict.items():
-            yield from bps.kickoff(panda, wait=True)
-            for seq_table in config.sequence_table:
-                yield from bps.kickoff(seq_table, wait=True)
-
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
         yield from bps.collect_while_completing(

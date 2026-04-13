@@ -3,9 +3,9 @@ from .common import (
     restore_panda_settings,
 )
 from .seq_table_scans import (
-    seq_non_linear,
-    seq_table,
-    setup_seq_table,
+    prepare_seq_table,
+    seq_table_non_linear,
+    seq_table_uniform_scan,
 )
 from .turbo_slit_fly_scans import (
     fly_scan_ts,
@@ -18,10 +18,10 @@ __all__ = [
     "fly_scan_ts",
     "fly_sweep",
     "fly_sweep_both_ways",
-    "seq_non_linear",
-    "seq_table",
+    "seq_table_non_linear",
+    "seq_table_uniform_scan",
     "trajectory_fly_scan",
-    "setup_seq_table",
+    "prepare_seq_table",
     "restore_panda_settings",
     "plan_store_settings",
 ]
