@@ -127,8 +127,8 @@ def seq_table_uniform_scan(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,  # noqa: B008
-    panda: HDFPanda,  # noqa: B008
+    motor: Motor,
+    panda: HDFPanda,
     num_trajectory_points: int = 10,
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
@@ -170,8 +170,8 @@ def seq_table_position_scan(
     stop: float,
     time_per_sweep: float,
     capture_positions: NDArray,
-    motor: Motor,  # noqa: B008
-    panda: HDFPanda,  # noqa: B008
+    motor: Motor,
+    panda: HDFPanda,
     num_trajectory_points: int = 10,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
@@ -231,7 +231,7 @@ def seq_table_scan(
     panda_dict: dict[
         HDFPanda, list[Callable[[], MsgGenerator]]
     ],  # dict containing functions to prepare each panda
-    motor: Motor,  # noqa: B008
+    motor: Motor,
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
 
@@ -249,12 +249,14 @@ def seq_table_scan(
     @bpp.run_decorator()
     def inner_plan():
         # prepare and kickoff panda seq tables
-        for panda, preparer_funcs in panda_dict.items():
+        for _, preparer_funcs in panda_dict.items():
             for prepare in preparer_funcs:
                 yield from prepare()
-            yield from bps.kickoff(panda)
 
-        yield from bps.declare_stream(*detectors, name="primary", collect=False)
+        yield from bps.declare_stream(*detectors, name="primary", collect=True)
+
+        for panda in detectors:
+            yield from bps.kickoff(panda)
 
         # Prepare pmac with the trajectory
         yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
