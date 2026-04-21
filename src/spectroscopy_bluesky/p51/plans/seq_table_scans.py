@@ -118,6 +118,7 @@ def seq_table_non_linear(
         angle,
         motor,
         panda,
+        num_trajectory_points=len(angle),
         number_of_sweeps=1,
     )
 
@@ -248,8 +249,10 @@ def seq_table_scan(
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator()
     def inner_plan():
+        yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
+
         # prepare and kickoff panda seq tables
-        for _, preparer_funcs in panda_dict.items():
+        for preparer_funcs in panda_dict.values():
             for prepare in preparer_funcs:
                 yield from prepare()
 
@@ -259,7 +262,6 @@ def seq_table_scan(
             yield from bps.kickoff(panda)
 
         # Prepare pmac with the trajectory
-        yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
         yield from bps.collect_while_completing(
