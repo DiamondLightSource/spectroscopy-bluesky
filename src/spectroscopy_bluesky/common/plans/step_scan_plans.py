@@ -1,5 +1,5 @@
-from collections.abc import Mapping
 from typing import Any
+
 import bluesky.plans as bp
 from bluesky.protocols import Readable
 from bluesky.utils import MsgGenerator
@@ -9,6 +9,7 @@ from ophyd_async.epics.motor import Motor
 Dictionary of scan arguments from motor scan_args (start, stop, steps)
 """
 
+
 def make_args(motor, scan_args, prefix=""):
     return {
         "motor" + prefix: motor,
@@ -16,6 +17,7 @@ def make_args(motor, scan_args, prefix=""):
         "stop" + prefix: scan_args[1],
         "steps" + prefix: int(scan_args[2]),
     }
+
 
 def step_scan(
     detectors: list[Readable],
@@ -44,6 +46,7 @@ def step_scan(
         **(metadata or {}),
     }
     yield from bp.scan([*detectors], *args.values(), md=_md_)
+
 
 def grid_scan(
     detectors: list[Readable],
