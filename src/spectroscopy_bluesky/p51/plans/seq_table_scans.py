@@ -36,6 +36,11 @@ from spectroscopy_bluesky.p51.plans.sequence_table import (
     SpectrumBasedTrigger,
 )
 
+from spectroscopy_bluesky.common.xas_scans import (
+    XasScanParameters,
+    XasScanPointGenerator,
+)
+
 from .common import (
     get_encoder_counts,
     setup_trajectory_scan_pvs,
@@ -123,6 +128,78 @@ def seq_table_non_linear(
     )
 
 
+def seq_table_energy_scan(
+    element: str,
+    edge: str,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+) -> MsgGenerator:
+    # Generate triggers
+    params = XasScanParameters(element, edge)
+    params.set_from_element_edge()
+    params.set_abc_from_gaf()
+    # params.exafsTimeType = "constant time"
+    gen = XasScanPointGenerator(params)
+    grid = gen.calculate_energy_time_grid()
+    angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
+
+    yield from seq_table_position_scan(
+        angle[0],
+        angle[-1],
+        time_per_sweep,
+        angle,
+        motor,
+        panda,
+        num_trajectory_points=len(angle),
+        number_of_sweeps=1,
+    )
+
+
+def seq_table_two_panda_scan(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    panda2: HDFPanda,
+    num_trajectory_points: int = 10,
+    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    add_sweep_triggers: bool = False,
+    number_of_sweeps: int = 4,
+) -> MsgGenerator:
+    # setup a second seq table for 'spectrum based' triggering
+    panda_dict = {}
+    if spectrum_triggers is not None:
+        seq_table = (
+            SeqTableBuilder()
+            .add_spectrum_based_triggers(spectrum_triggers)
+            .get_seq_table()
+        )
+        num_seqtable_repeats = 1
+        if number_of_sweeps > 1:
+            num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
+
+        prepare_triggers_seqtable = prepare_seq_table(
+            panda2, seq_table, 1, num_seqtable_repeats
+        )
+        panda_dict.setdefault(panda2, []).append(prepare_triggers_seqtable)
+
+    yield from seq_table_uniform_scan(
+        start,
+        stop,
+        stepsize,
+        time_per_sweep,
+        motor=motor,
+        panda=panda,
+        num_trajectory_points=num_trajectory_points,
+        add_sweep_triggers=add_sweep_triggers,
+        number_of_sweeps=number_of_sweeps,
+        panda_dict=panda_dict,
+    )
+
+
 def seq_table_uniform_scan(
     start: float,
     stop: float,
@@ -134,12 +211,14 @@ def seq_table_uniform_scan(
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
+    panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
 ) -> MsgGenerator:
 
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
     # setup a second seq table for 'spectrum based' triggering :
-    panda_dict = {}
+    if panda_dict is None:
+        panda_dict = {}
     if spectrum_triggers is not None:
         seq_table = (
             SeqTableBuilder()
