@@ -108,6 +108,7 @@ def seq_table_non_linear(
     time_per_sweep: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
+    number_of_sweeps: int = 1,
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
 
@@ -124,7 +125,7 @@ def seq_table_non_linear(
         motor,
         panda,
         num_trajectory_points=len(angle),
-        number_of_sweeps=1,
+        number_of_sweeps=number_of_sweeps,
     )
 
 
@@ -134,6 +135,7 @@ def seq_table_energy_scan(
     time_per_sweep: float,
     motor: Motor,
     panda: HDFPanda,
+    number_of_sweeps: int = 1,
 ) -> MsgGenerator:
     # Generate triggers
     params = XasScanParameters(element, edge)
@@ -152,7 +154,7 @@ def seq_table_energy_scan(
         motor,
         panda,
         num_trajectory_points=len(angle),
-        number_of_sweeps=1,
+        number_of_sweeps=number_of_sweeps,
     )
 
 
