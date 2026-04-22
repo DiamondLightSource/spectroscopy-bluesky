@@ -60,7 +60,7 @@ p2 = panda2(path_provider)
 ts = turbo_slit_x()
 pmac = turbo_slit_pmac(ts)
 
-RE(ensure_connected(p, ts, pmac))
+RE(ensure_connected(p, p2, ts, pmac))
 
 
 def two_seq_tables_plan() -> MsgGenerator:

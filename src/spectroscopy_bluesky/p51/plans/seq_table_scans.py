@@ -184,7 +184,7 @@ def seq_table_two_panda_scan(
         prepare_triggers_seqtable = prepare_seq_table(
             panda2, seq_table, 1, num_seqtable_repeats
         )
-        panda_dict.setdefault(panda2, []).append(prepare_triggers_seqtable)
+        panda_dict[panda2] = [prepare_triggers_seqtable]
 
     yield from seq_table_uniform_scan(
         start,
