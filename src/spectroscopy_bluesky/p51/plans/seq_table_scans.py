@@ -101,6 +101,34 @@ def prepare_seq_table(
     return inner_plan
 
 
+def prepare_panda(
+    panda: HDFPanda,
+) -> Callable[[], MsgGenerator]:
+    """Return a function that can be used to prepare and arm (kickoff) a
+    panda without a sequencer table. Used mainly for the debug PandA
+
+    Args:
+        panda (HDFPanda): Panda object to be operated on
+
+    Returns:
+        Callable[[], MsgGenerator]: _description_
+
+    Yields:
+        Iterator[Callable[[], MsgGenerator]]: _description_
+    """
+    trigger_info = TriggerInfo(
+        number_of_events=0,
+        trigger=DetectorTrigger.EXTERNAL_LEVEL,
+        livetime=1e-5,
+        deadtime=1e-5,
+    )
+
+    def inner_plan():
+        yield from bps.prepare(panda, trigger_info)
+
+    return inner_plan
+
+
 def seq_table_non_linear(
     ei: float,
     ef: float,
@@ -305,6 +333,67 @@ def seq_table_position_scan(
     # if not already present).
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
+    yield from seq_table_scan(spec, panda_dict, motor=motor)
+
+
+def debug_scan(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda_seq: HDFPanda,
+    panda_debug: HDFPanda,
+    num_trajectory_points: int = 10,
+    number_of_sweeps: int = 4,
+    panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+) -> MsgGenerator:
+
+    time_per_traj_point = time_per_sweep / num_trajectory_points
+    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+
+    print(
+        f"Num trajectorypoints : {num_trajectory_points}, "
+        f"time per traj point : {time_per_traj_point} "
+        f"Num capture positions: {len(capture_positions)}"
+    )
+
+    # Prepare motor info using trajectory scanning
+    spec = Fly(
+        time_per_traj_point
+        @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
+    )
+
+    # add points to capture positions on the reverse sweep
+    if number_of_sweeps > 1:
+        num_captures = capture_positions.size
+        positions = np.zeros(2 * num_captures)
+        positions[0:num_captures] = capture_positions
+        positions[num_captures : num_captures * 2] = np.flip(capture_positions)
+    else:
+        positions = capture_positions
+
+    num_seqtable_repeats = 1
+    if number_of_sweeps > 1:
+        num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
+
+    # Sequence table has position triggers for one back-and-forth sweep.
+    # Use multiple repetitions of seq table to capture subsequent sweeps.
+    seqTable_builder = SeqTableBuilder()
+    seqTable_builder.convert_to_encoder = get_encoder_counts
+    seqTable_builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
+    # initialise if nothing has been passed in
+    if panda_dict is None:
+        panda_dict = {}
+
+    prepare_position_seqtable = prepare_seq_table(
+        panda_seq, seqTable_builder.get_seq_table(), 1, num_seqtable_repeats
+    )
+    # append position sequence table setup to panda entry (make empty list first
+    # if not already present).
+    panda_dict.setdefault(panda_seq, []).append(prepare_position_seqtable)
+
+    panda_dict[panda_debug] = [prepare_panda(panda=panda_debug)]
     yield from seq_table_scan(spec, panda_dict, motor=motor)
 
 
