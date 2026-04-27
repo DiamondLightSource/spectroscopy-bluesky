@@ -53,7 +53,6 @@ def prepare_seq_table(
     seq_table_number: int = 1,
     num_repeats: int = 1,
     prescale_as_us: float = 1,
-    prepare_panda: bool = True,
 ) -> Callable[[], MsgGenerator]:
     """Return a function that can be used to prepare and arm (kickoff) a
     panda sequence table
@@ -65,8 +64,6 @@ def prepare_seq_table(
                                 Defaults to 1.
         num_repeats (int, optional): Number of repeats of sequence table. Defaults to 1.
         prescale_as_us (float, optional): _description_. Defaults to 1.
-        prepare_panda (bool, optional): If true, add calls to also arm the panda as well
-        as the sequence table. Defaults to True.
 
     Returns:
         Callable[[], MsgGenerator]: _description_
@@ -83,16 +80,7 @@ def prepare_seq_table(
         StaticSeqTableTriggerLogic(panda.seq[seq_table_number])
     )
 
-    trigger_info = TriggerInfo(
-        number_of_events=len(seq_table),
-        trigger=DetectorTrigger.EXTERNAL_LEVEL,
-        livetime=1e-5,
-        deadtime=1e-5,
-    )
-
     def inner_plan():
-        if prepare_panda:
-            yield from bps.prepare(panda, trigger_info)
         yield from bps.prepare(seqtable_flyer, seq_table_info, wait=True)
 
         yield from bps.kickoff(seqtable_flyer)
@@ -101,11 +89,11 @@ def prepare_seq_table(
     return inner_plan
 
 
-def prepare_panda(
+def prepare_panda_data(
     panda: HDFPanda,
 ) -> Callable[[], MsgGenerator]:
     """Return a function that can be used to prepare and arm (kickoff) a
-    panda without a sequencer table. Used mainly for the debug PandA
+    panda data.
 
     Args:
         panda (HDFPanda): Panda object to be operated on
@@ -214,7 +202,7 @@ def seq_table_two_panda_scan(
         prepare_triggers_seqtable = prepare_seq_table(
             panda2, seq_table, 1, num_seqtable_repeats
         )
-        panda_dict[panda2] = [prepare_triggers_seqtable]
+        panda_dict[panda2] = [prepare_triggers_seqtable, prepare_panda_data(panda2)]
 
     yield from seq_table_uniform_scan(
         start,
@@ -255,10 +243,8 @@ def seq_table_uniform_scan(
             .get_seq_table()
         )
 
-        prepare_triggers_seqtable = prepare_seq_table(
-            panda, seq_table, 2, prepare_panda=False
-        )
-        panda_dict[panda] = [prepare_triggers_seqtable]
+        prepare_triggers_seqtable = prepare_seq_table(panda, seq_table, 2)
+        panda_dict[panda] = [prepare_triggers_seqtable, prepare_panda_data(panda)]
 
     yield from seq_table_position_scan(
         start,
@@ -329,8 +315,7 @@ def seq_table_position_scan(
     )
     # append position sequence table setup to panda entry (make empty list first
     # if not already present).
-    panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
-
+    panda_dict[panda] = [prepare_position_seqtable, prepare_panda_data(panda)]
     yield from seq_table_scan(spec, panda_dict, motor=motor)
 
 
@@ -386,11 +371,8 @@ def debug_scan(
     prepare_position_seqtable = prepare_seq_table(
         panda_seq, seqTable_builder.get_seq_table(), 1, num_seqtable_repeats
     )
-    # append position sequence table setup to panda entry (make empty list first
-    # if not already present).
-    panda_dict.setdefault(panda_seq, []).append(prepare_position_seqtable)
-
-    panda_dict[panda_debug] = [prepare_panda(panda=panda_debug)]
+    panda_dict[panda_seq] = [prepare_position_seqtable, prepare_panda_data(panda_seq)]
+    panda_dict[panda_debug] = [prepare_panda_data(panda=panda_debug)]
     yield from seq_table_scan(spec, panda_dict, motor=motor)
 
 
