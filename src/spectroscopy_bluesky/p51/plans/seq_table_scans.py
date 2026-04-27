@@ -124,7 +124,7 @@ def prepare_panda(
     )
 
     def inner_plan():
-        yield from bps.prepare(panda, trigger_info)
+        yield from bps.prepare(panda, trigger_info, wait=True)
 
     return inner_plan
 
@@ -243,7 +243,6 @@ def seq_table_uniform_scan(
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
 ) -> MsgGenerator:
-
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
     # setup a second seq table for 'spectrum based' triggering :
@@ -287,7 +286,6 @@ def seq_table_position_scan(
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
 ) -> MsgGenerator:
-
     time_per_traj_point = time_per_sweep / num_trajectory_points
 
     print(
@@ -348,7 +346,6 @@ def debug_scan(
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
 ) -> MsgGenerator:
-
     time_per_traj_point = time_per_sweep / num_trajectory_points
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
