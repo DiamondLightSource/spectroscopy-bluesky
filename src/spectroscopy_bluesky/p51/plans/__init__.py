@@ -3,6 +3,7 @@ from .common import (
     restore_panda_settings,
 )
 from .seq_table_scans import (
+    configurable_rampup_turnaround,
     prepare_seq_table,
     seq_table_energy_scan,
     seq_table_non_linear,
@@ -28,4 +29,5 @@ __all__ = [
     "prepare_seq_table",
     "restore_panda_settings",
     "plan_store_settings",
+    "configurable_rampup_turnaround",
 ]
