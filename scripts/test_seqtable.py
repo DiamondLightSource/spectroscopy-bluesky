@@ -12,6 +12,7 @@ from ophyd_async.core import PathProvider, StaticFilenameProvider, StaticPathPro
 from ophyd_async.plan_stubs import ensure_connected
 
 from spectroscopy_bluesky.p51.plans import (
+    configurable_rampup_turnaround,
     seq_table_energy_scan,
     seq_table_two_panda_scan,
     seq_table_uniform_scan,
@@ -112,6 +113,22 @@ def energy_scan() -> MsgGenerator:
     )
 
 
+def configurable_rampup_turnaround_plan() -> MsgGenerator:
+    yield from configurable_rampup_turnaround(
+        -10,
+        10,
+        1.0,
+        10,
+        motor=ts,
+        panda=p,
+        num_trajectory_points=12,
+        number_of_sweeps=6,
+        ramp_time=0.1,
+        turnaround_time=0.1,
+    )
+
+
 RE(two_seq_tables_plan())
 RE(seq_table_two_panda_plan())
 RE(energy_scan())
+RE(configurable_rampup_turnaround_plan())

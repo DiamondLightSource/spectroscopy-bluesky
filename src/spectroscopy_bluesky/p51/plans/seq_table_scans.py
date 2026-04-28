@@ -15,6 +15,7 @@ from ophyd_async.core import (
 from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
     PmacTrajectoryTriggerLogic,
+    PmacScanInfo,
 )
 from ophyd_async.fastcs.panda import (
     HDFPanda,
@@ -202,6 +203,32 @@ def seq_table_two_panda_scan(
     )
 
 
+def configurable_rampup_turnaround(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    num_trajectory_points: int = 10,
+    number_of_sweeps: int = 4,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
+) -> MsgGenerator:
+    yield from seq_table_uniform_scan(
+        start,
+        stop,
+        stepsize,
+        time_per_sweep,
+        motor,
+        panda,
+        num_trajectory_points,
+        number_of_sweeps=number_of_sweeps,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
+    )
+
+
 def seq_table_uniform_scan(
     start: float,
     stop: float,
@@ -213,6 +240,8 @@ def seq_table_uniform_scan(
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
 ) -> MsgGenerator:
 
@@ -243,6 +272,8 @@ def seq_table_uniform_scan(
         num_trajectory_points=num_trajectory_points,
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
         panda_dict=panda_dict,
     )
 
@@ -258,6 +289,8 @@ def seq_table_position_scan(
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
 ) -> MsgGenerator:
 
     time_per_traj_point = time_per_sweep / num_trajectory_points
@@ -305,7 +338,7 @@ def seq_table_position_scan(
     # if not already present).
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
-    yield from seq_table_scan(spec, panda_dict, motor=motor)
+    yield from seq_table_scan(spec, panda_dict, motor, ramp_time, turnaround_time)
 
 
 def seq_table_scan(
@@ -314,6 +347,8 @@ def seq_table_scan(
         HDFPanda, list[Callable[[], MsgGenerator]]
     ],  # dict containing functions to prepare each panda
     motor: Motor,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
 
@@ -326,11 +361,14 @@ def seq_table_scan(
 
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
+    pamc_trigger_logic = PmacScanInfo(
+        spec=scan_spec, ramp_time=ramp_time, turnaround_time=turnaround_time
+    )
 
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator()
     def inner_plan():
-        yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
+        yield from bps.prepare(pmac_trajectory_flyer, pamc_trigger_logic, wait=True)
 
         # prepare and kickoff panda seq tables
         for preparer_funcs in panda_dict.values():
