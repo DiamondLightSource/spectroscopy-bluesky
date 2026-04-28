@@ -22,6 +22,14 @@ class SeqTableBuilder:
         self.seq_table += create_seqtable(positions, self.convert_to_encoder, **kwargs)
         return self
 
+    def add_variable_positions(
+        self, positions: NDArray, time: NDArray, **kwargs
+    ) -> SeqTableBuilder:
+        self.seq_table += create_variable_seqtable(
+            positions, self.convert_to_encoder, time, **kwargs
+        )
+        return self
+
     def add_start_end_triggers(
         self, start_trig="outb1", end_trig="outc1"
     ) -> SeqTableBuilder:
@@ -120,4 +128,45 @@ def create_seqtable(
     table = SeqTable()  # type: ignore
     for d, p in zip(direction, enc_count_positions, strict=True):
         table += SeqTable.row(repeats=1, trigger=d, position=p, **kwargs)
+    return table
+
+
+def create_variable_seqtable(
+    positions: Iterable[float],
+    convert_encoder_counts: Callable[[Any], float],
+    time: Iterable[float],
+    **kwargs,
+) -> SeqTable:
+    """
+    Create SeqTable with rows setup to do position based triggering.
+
+    <li> Each position in positions NDArray is converted to a row of the sequence table.
+    <li> Position values are converted to encoder counts using
+        'get_encoder_counts' function.
+    <li> SeqTrigger direction set to GT or LT depending on when encoder values
+        increase or decrease.
+
+    :param positions: positions in user coordinates.
+    :param kwargs: additional kwargs to be used when generating each
+    row of sequence table (e.g. for setting trigger outputs, trigger length etc.)
+    :return: SeqTable
+    """
+
+    # convert user positions to encoder positions
+    enc_count_positions = [int(convert_encoder_counts(x)) for x in positions]
+    capture_time = [int(x) for x in time]
+
+    # determine direction of each segment
+    direction = [
+        SeqTrigger.POSA_GT if current < next else SeqTrigger.POSA_LT
+        for current, next in pairwise(enc_count_positions)
+    ]
+    direction.append(direction[-1])
+
+    table = SeqTable()  # type: ignore
+    for d, p, t in zip(direction, enc_count_positions, capture_time, strict=True):
+        table += SeqTable.row(
+            repeats=1, trigger=d, position=p, time1=t, time2=t, **kwargs
+        )
+
     return table

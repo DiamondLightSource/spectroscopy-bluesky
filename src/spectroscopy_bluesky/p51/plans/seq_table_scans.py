@@ -15,6 +15,7 @@ from ophyd_async.core import (
 from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
     PmacTrajectoryTriggerLogic,
+    PmacScanInfo,
 )
 from ophyd_async.fastcs.panda import (
     HDFPanda,
@@ -23,8 +24,13 @@ from ophyd_async.fastcs.panda import (
     StaticSeqTableTriggerLogic,
 )
 from ophyd_async.plan_stubs import ensure_connected
-from scanspec.specs import Fly, Line
+from scanspec.specs import Fly, Line, Concat, Product
 from collections.abc import Callable
+
+from spectroscopy_bluesky.common.xas_scans import (
+    XasScanParameters,
+    XasScanPointGenerator,
+)
 
 from spectroscopy_bluesky.common.quantity_conversion import (
     si_111_lattice_spacing,
@@ -103,6 +109,7 @@ def seq_table_non_linear(
     time_per_sweep: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
+    number_of_sweeps: int = 1,
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
 
@@ -119,7 +126,198 @@ def seq_table_non_linear(
         motor,
         panda,
         num_trajectory_points=len(angle),
-        number_of_sweeps=1,
+        number_of_sweeps=number_of_sweeps,
+    )
+
+
+def seq_table_energy_scan(
+    element: str,
+    edge: str,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    number_of_sweeps: int = 1,
+    variable_exafs_time: bool = False,
+) -> MsgGenerator:
+    # Generate triggers
+    params = XasScanParameters(element, edge)
+    params.set_from_element_edge()
+    params.set_abc_from_gaf()
+    if variable_exafs_time:
+        params.exafsTimeType = "variable time"
+    gen = XasScanPointGenerator(params)
+    grid = gen.calculate_energy_time_grid()
+    angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
+
+    yield from seq_table_position_scan(
+        angle[0],
+        angle[-1],
+        time_per_sweep,
+        angle,
+        motor,
+        panda,
+        num_trajectory_points=len(angle),
+        number_of_sweeps=number_of_sweeps,
+    )
+
+
+def seq_table_two_panda_scan(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    panda2: HDFPanda,
+    num_trajectory_points: int = 10,
+    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    add_sweep_triggers: bool = False,
+    number_of_sweeps: int = 4,
+) -> MsgGenerator:
+    # setup a second seq table for 'spectrum based' triggering
+    panda_dict = {}
+    if spectrum_triggers is not None:
+        seq_table = (
+            SeqTableBuilder()
+            .add_spectrum_based_triggers(spectrum_triggers)
+            .get_seq_table()
+        )
+        num_seqtable_repeats = 1
+        if number_of_sweeps > 1:
+            num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
+
+        prepare_triggers_seqtable = prepare_seq_table(
+            panda2, seq_table, 1, num_seqtable_repeats
+        )
+        panda_dict[panda2] = [prepare_triggers_seqtable]
+
+    yield from seq_table_uniform_scan(
+        start,
+        stop,
+        stepsize,
+        time_per_sweep,
+        motor=motor,
+        panda=panda,
+        num_trajectory_points=num_trajectory_points,
+        add_sweep_triggers=add_sweep_triggers,
+        number_of_sweeps=number_of_sweeps,
+        panda_dict=panda_dict,
+    )
+
+
+def panda_step_scan(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    num_trajectory_points: int = 10,
+    number_of_sweeps: int = 4,
+    add_sweep_triggers: bool = False,
+) -> MsgGenerator:
+    time_per_traj_point = time_per_sweep / num_trajectory_points
+    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+    print(
+        f"Num trajectorypoints : {num_trajectory_points}, "
+        f"time per traj point : {time_per_traj_point}"
+    )
+
+    scan_spec = time_per_traj_point @ (
+        number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points)
+    )
+
+    yield from seq_table_position_scan(
+        start,
+        stop,
+        time_per_sweep,
+        capture_positions,
+        motor,
+        panda,
+        num_trajectory_points,
+        add_sweep_triggers,
+        number_of_sweeps,
+        scan_spec=scan_spec,
+    )
+
+
+def variable_motor_speed_scan(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    velocity: list[float],
+    num_trajectory_points: int = 10,
+    number_of_sweeps: int = 4,
+    add_sweep_triggers: bool = False,
+) -> MsgGenerator:
+    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+    new_number_of_sweeps = mt.ceil(number_of_sweeps / len(velocity))
+    spec = Fly(
+        velocity[0]
+        @ Product(
+            new_number_of_sweeps,
+            ~Line(motor, start, stop, num_trajectory_points),
+            gap=True,
+        )
+    )
+    for vel in velocity[1:]:
+        spec2 = Fly(
+            vel
+            @ Product(
+                new_number_of_sweeps,
+                ~Line(motor, start, stop, num_trajectory_points),
+                gap=True,
+            )
+        )
+        temp_spec = Concat(spec, spec2, gap=True)
+        spec = temp_spec
+
+    # print(spec)
+    # print(f"spec.frames()[x].gap() = {spec.frames().gap}")
+    # print(f"spec.frames()[x].midpoints() = {spec.frames().midpoints}")
+
+    yield from seq_table_position_scan(
+        start,
+        stop,
+        time_per_sweep,
+        capture_positions,
+        motor,
+        panda,
+        num_trajectory_points,
+        add_sweep_triggers,
+        number_of_sweeps,
+        scan_spec=spec,
+        ramp_time=0,
+        turnaround_time=0.02,
+    )
+
+
+def configurable_rampup_turnaround(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    num_trajectory_points: int = 10,
+    number_of_sweeps: int = 4,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
+) -> MsgGenerator:
+    yield from seq_table_uniform_scan(
+        start,
+        stop,
+        stepsize,
+        time_per_sweep,
+        motor,
+        panda,
+        num_trajectory_points,
+        number_of_sweeps=number_of_sweeps,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
     )
 
 
@@ -134,6 +332,9 @@ def seq_table_uniform_scan(
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
+    panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
 ) -> MsgGenerator:
 
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
@@ -163,6 +364,8 @@ def seq_table_uniform_scan(
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
     )
 
 
@@ -177,20 +380,23 @@ def seq_table_position_scan(
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    capture_time: list[float] | None = None,
+    prescale_as_us: float = 1,
+    scan_spec: Fly | None = None,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
 ) -> MsgGenerator:
+    if scan_spec is None:
+        time_per_traj_point = time_per_sweep / num_trajectory_points
 
-    time_per_traj_point = time_per_sweep / num_trajectory_points
-
-    print(
-        f"Num trajectorypoints : {num_trajectory_points}, "
-        f"time per traj point : {time_per_traj_point}"
-    )
-
-    # Prepare motor info using trajectory scanning
-    spec = Fly(
-        time_per_traj_point
-        @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
-    )
+        print(
+            f"Num trajectorypoints : {num_trajectory_points}, "
+            f"time per traj point : {time_per_traj_point}"
+        )
+        scan_spec = Fly(
+            time_per_traj_point
+            @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
+        )
 
     # add points to capture positions on the reverse sweep
     if number_of_sweeps > 1:
@@ -198,8 +404,13 @@ def seq_table_position_scan(
         positions = np.zeros(2 * num_captures)
         positions[0:num_captures] = capture_positions
         positions[num_captures : num_captures * 2] = np.flip(capture_positions)
+        time = np.zeros(2 * num_captures)
+        if capture_time is not None:
+            time[0:num_captures] = capture_time
+            time[num_captures : num_captures * 2] = np.flip(capture_time)
     else:
         positions = capture_positions
+        time = capture_time
 
     num_seqtable_repeats = 1
     if number_of_sweeps > 1:
@@ -209,7 +420,14 @@ def seq_table_position_scan(
     # Use multiple repetitions of seq table to capture subsequent sweeps.
     seqTable_builder = SeqTableBuilder()
     seqTable_builder.convert_to_encoder = get_encoder_counts
-    seqTable_builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
+    if capture_time is None:
+        seqTable_builder.add_positions(
+            positions, time1=1, outa1=True, time2=1, outa2=False
+        )
+    else:
+        seqTable_builder.add_variable_positions(
+            positions, time=time, outa1=True, outa2=False
+        )
     if add_sweep_triggers:
         seqTable_builder.add_start_end_triggers("outb1", "outc1")
 
@@ -218,13 +436,17 @@ def seq_table_position_scan(
         panda_dict = {}
 
     prepare_position_seqtable = prepare_seq_table(
-        panda, seqTable_builder.get_seq_table(), 1, num_seqtable_repeats
+        panda,
+        seqTable_builder.get_seq_table(),
+        1,
+        num_seqtable_repeats,
+        prescale_as_us=prescale_as_us,
     )
     # append position sequence table setup to panda entry (make empty list first
     # if not already present).
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
-    yield from seq_table_scan(spec, panda_dict, motor=motor)
+    yield from seq_table_scan(scan_spec, panda_dict, motor, ramp_time, turnaround_time)
 
 
 def seq_table_scan(
@@ -233,6 +455,8 @@ def seq_table_scan(
         HDFPanda, list[Callable[[], MsgGenerator]]
     ],  # dict containing functions to prepare each panda
     motor: Motor,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
 
@@ -245,11 +469,14 @@ def seq_table_scan(
 
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
+    pamc_trigger_logic = PmacScanInfo(
+        spec=scan_spec, ramp_time=ramp_time, turnaround_time=turnaround_time
+    )
 
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator()
     def inner_plan():
-        yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
+        yield from bps.prepare(pmac_trajectory_flyer, pamc_trigger_logic, wait=True)
 
         # prepare and kickoff panda seq tables
         for preparer_funcs in panda_dict.values():

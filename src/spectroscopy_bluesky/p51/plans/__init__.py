@@ -3,9 +3,14 @@ from .common import (
     restore_panda_settings,
 )
 from .seq_table_scans import (
+    configurable_rampup_turnaround,
+    panda_step_scan,
     prepare_seq_table,
+    seq_table_energy_scan,
     seq_table_non_linear,
+    seq_table_two_panda_scan,
     seq_table_uniform_scan,
+    variable_motor_speed_scan,
 )
 from .turbo_slit_fly_scans import (
     fly_scan_ts,
@@ -24,4 +29,9 @@ __all__ = [
     "prepare_seq_table",
     "restore_panda_settings",
     "plan_store_settings",
+    "variable_motor_speed_scan",
+    "panda_step_scan",
+    "configurable_rampup_turnaround",
+    "seq_table_energy_scan",
+    "seq_table_two_panda_scan",
 ]
