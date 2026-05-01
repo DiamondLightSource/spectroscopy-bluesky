@@ -142,15 +142,18 @@ def seq_table_energy_scan(
     variable_exafs_time: bool = False,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
+    prescale_as_us = 1
     # Generate triggers
     params = XasScanParameters(element, edge)
     params.set_from_element_edge()
     params.set_abc_from_gaf()
     if variable_exafs_time:
         params.exafsTimeType = "variable time"
+        prescale_as_us = 10
     gen = XasScanPointGenerator(params)
     grid = gen.calculate_energy_time_grid()
     angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
+    capture_time = grid[:, 1] * prescale_as_us
 
     md = {
         "energy scan parameters": {
@@ -167,6 +170,8 @@ def seq_table_energy_scan(
         angle,
         motor,
         panda,
+        capture_time=capture_time,
+        prescale_as_us=prescale_as_us,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
         metadata=md,
