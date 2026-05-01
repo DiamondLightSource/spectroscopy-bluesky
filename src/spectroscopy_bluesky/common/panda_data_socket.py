@@ -28,6 +28,9 @@ class DataSocket:
         data = self.socket.recv(1024)
         print(f"Server response {data}")
 
+    def disconnect(self):
+        self.socket.close()
+
     def collect_data_in_thread(self):
         def collect_safe():
             try:
@@ -44,7 +47,7 @@ class DataSocket:
         while len(data) > 0 and not data.startswith(b"END"):
             data = self.socket.recv(1024)
             data_string = data.decode()
-            print(len(data_string), data)
+            # print(len(data_string), data)
             if len(data_string) > 0:
                 ## remove the final '\n' (received data ends with 1 newline,
                 # fields ends with 2)
@@ -76,8 +79,8 @@ class DataSocket:
         if self.data_start_index > 0:
             # find index of line that starts with 'END' (i.e. end of data block)
             end_index = [
-                panda_socket.all_data.index(val)
-                for val in panda_socket.all_data
+                self.all_data.index(val)
+                for val in self.all_data
                 if val.startswith("END")
             ]
             if len(end_index) == 1:
@@ -102,6 +105,7 @@ class DataSocket:
         if frame_index >= 0 and frame_index < len(self.all_data):
             return self.all_data[frame_index]
 
+    def get_frame_values(self, frame_index):
+        frame_data = self.get_frame(frame_index)
+        return [float(val) for val in frame_data.split()]
 
-panda_socket = DataSocket("bl51p-ts-panda-02", 8889)
-panda_socket.connect()
