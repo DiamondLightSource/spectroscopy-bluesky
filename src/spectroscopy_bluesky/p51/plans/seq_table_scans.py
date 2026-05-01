@@ -153,7 +153,9 @@ def seq_table_energy_scan(
     gen = XasScanPointGenerator(params)
     grid = gen.calculate_energy_time_grid()
     angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
-    capture_time = grid[:, 1] * prescale_as_us
+    capture_time = None
+    if variable_exafs_time:
+        capture_time = grid[:, 1] * prescale_as_us
 
     md = {
         "energy scan parameters": {
