@@ -1,5 +1,5 @@
 import math as mt  # noqa: I001
-
+from typing import Any
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
 import numpy as np
@@ -110,6 +110,7 @@ def seq_table_non_linear(
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
     number_of_sweeps: int = 1,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
 
@@ -127,6 +128,7 @@ def seq_table_non_linear(
         panda,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
+        metadata=metadata,
     )
 
 
@@ -138,6 +140,7 @@ def seq_table_energy_scan(
     panda: HDFPanda,
     number_of_sweeps: int = 1,
     variable_exafs_time: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # Generate triggers
     params = XasScanParameters(element, edge)
@@ -149,6 +152,14 @@ def seq_table_energy_scan(
     grid = gen.calculate_energy_time_grid()
     angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
 
+    md = {
+        "energy scan parameters": {
+            "element": element,
+            "edge": edge,
+        },
+        **(metadata or {}),
+    }
+
     yield from seq_table_position_scan(
         angle[0],
         angle[-1],
@@ -158,6 +169,7 @@ def seq_table_energy_scan(
         panda,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
+        metadata=md,
     )
 
 
@@ -173,6 +185,7 @@ def seq_table_two_panda_scan(
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # setup a second seq table for 'spectrum based' triggering
     panda_dict = {}
@@ -202,6 +215,7 @@ def seq_table_two_panda_scan(
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
+        metadata=metadata,
     )
 
 
@@ -215,6 +229,7 @@ def panda_step_scan(
     num_trajectory_points: int = 10,
     number_of_sweeps: int = 4,
     add_sweep_triggers: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     time_per_traj_point = time_per_sweep / num_trajectory_points
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
@@ -238,6 +253,7 @@ def panda_step_scan(
         add_sweep_triggers,
         number_of_sweeps,
         scan_spec=scan_spec,
+        metadata=metadata,
     )
 
 
@@ -252,6 +268,7 @@ def variable_motor_speed_scan(
     num_trajectory_points: int = 10,
     number_of_sweeps: int = 4,
     add_sweep_triggers: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
     new_number_of_sweeps = mt.ceil(number_of_sweeps / len(velocity))
@@ -292,6 +309,7 @@ def variable_motor_speed_scan(
         scan_spec=spec,
         ramp_time=0,
         turnaround_time=0.02,
+        metadata=metadata,
     )
 
 
@@ -306,6 +324,7 @@ def configurable_rampup_turnaround(
     number_of_sweeps: int = 4,
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     yield from seq_table_uniform_scan(
         start,
@@ -318,6 +337,7 @@ def configurable_rampup_turnaround(
         number_of_sweeps=number_of_sweeps,
         ramp_time=ramp_time,
         turnaround_time=turnaround_time,
+        metadata=metadata,
     )
 
 
@@ -335,6 +355,7 @@ def seq_table_uniform_scan(
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
 
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
@@ -366,6 +387,7 @@ def seq_table_uniform_scan(
         panda_dict=panda_dict,
         ramp_time=ramp_time,
         turnaround_time=turnaround_time,
+        metadata=metadata,
     )
 
 
@@ -385,6 +407,7 @@ def seq_table_position_scan(
     scan_spec: Fly | None = None,
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     if scan_spec is None:
         time_per_traj_point = time_per_sweep / num_trajectory_points
@@ -446,7 +469,9 @@ def seq_table_position_scan(
     # if not already present).
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
-    yield from seq_table_scan(scan_spec, panda_dict, motor, ramp_time, turnaround_time)
+    yield from seq_table_scan(
+        scan_spec, panda_dict, motor, ramp_time, turnaround_time, metadata=metadata
+    )
 
 
 def seq_table_scan(
@@ -457,6 +482,7 @@ def seq_table_scan(
     motor: Motor,
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
 
@@ -473,8 +499,18 @@ def seq_table_scan(
         spec=scan_spec, ramp_time=ramp_time, turnaround_time=turnaround_time
     )
 
+    _md = {
+        "plan_args": {
+            "detectors": {det.name for det in detectors},
+            "spec": repr(scan_spec),
+            "rampup time": repr(ramp_time),
+            "turnaround_time": repr(turnaround_time),
+        },
+        **(metadata or {}),
+    }
+
     @bpp.stage_decorator([*detectors])
-    @bpp.run_decorator()
+    @bpp.run_decorator(md=_md)
     def inner_plan():
         yield from bps.prepare(pmac_trajectory_flyer, pamc_trigger_logic, wait=True)
 

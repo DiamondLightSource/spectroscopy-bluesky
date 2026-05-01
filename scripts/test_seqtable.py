@@ -171,10 +171,26 @@ def configurable_rampup_turnaround_plan() -> MsgGenerator:
     )
 
 
-# RE(two_seq_tables_plan())
-# RE(seq_table_two_panda_plan())
-# RE(energy_scan_variable_time())
-# RE(energy_scan_constant_time())
-# RE(variable_motor_speed_plan()) # Not working at the moment
-# RE(step_scan_with_panda())
+def add_metadata() -> MsgGenerator:
+    yield from seq_table_uniform_scan(
+        0,
+        5,
+        1.0,
+        5.0,
+        num_trajectory_points=10,
+        number_of_sweeps=6,
+        add_sweep_triggers=True,
+        motor=ts,
+        panda=p,
+        metadata={"comments": "this is a uniform scan!"},
+    )
+
+
+RE(two_seq_tables_plan())
+RE(seq_table_two_panda_plan())
+RE(energy_scan_variable_time())
+RE(energy_scan_constant_time())
+RE(variable_motor_speed_plan())
+RE(step_scan_with_panda())
 RE(configurable_rampup_turnaround_plan())
+RE(add_metadata())
