@@ -2,6 +2,7 @@ from .common import (
     plan_store_settings,
     restore_panda_settings,
 )
+from .detector_scans import xsp_scan
 from .seq_table_scans import (
     prepare_seq_table,
     seq_table_energy_scan,
@@ -28,4 +29,5 @@ __all__ = [
     "prepare_seq_table",
     "restore_panda_settings",
     "plan_store_settings",
+    "xsp_scan",
 ]
