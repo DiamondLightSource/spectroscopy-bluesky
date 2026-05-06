@@ -14,6 +14,23 @@ def xsp_scan(
     time_per_frame: float = 1,
     chunk: int | None = None,
 ) -> MsgGenerator:
+    """Scan using only Xspress detector.
+
+    Args:
+        xspress (XspressDetector): FastCS-Xspress object to use in the scan.
+        num_frames (int): number of frames to acquire.
+
+        time_per_frame (float): acquisition time of each frame in seconds.
+
+        chunk (int, Optional): how many frames to bundle before sending down the pipeline.
+        If no value is present chunks will be calculated
+    Returns:
+        Callable[[], MsgGenerator]: _description_
+
+    Yields:
+        Iterator[Callable[[], MsgGenerator]]: _description_
+
+    """
     yield from ensure_connected(xspress)
 
     @bpp.run_decorator()
