@@ -3,11 +3,17 @@ from pathlib import PurePath
 from bluesky import RunEngine
 from dodal.beamlines.p51 import panda1, panda2, turbo_slit_x
 from dodal.utils import BeamlinePrefix, get_beamline_name
-from ophyd_async.core import PathProvider, StaticFilenameProvider, StaticPathProvider
+from ophyd_async.core import (
+    AutoIncrementFilenameProvider,
+    PathProvider,
+    StaticFilenameProvider,
+    StaticPathProvider,
+)
 from ophyd_async.fastcs.xspress import XspressDetector
 from ophyd_async.plan_stubs import ensure_connected
 
 from spectroscopy_bluesky.p51.plans.common import restore_panda_settings
+from spectroscopy_bluesky.p51.plans.detector_scans import xsp_scan  # noqa: F401
 
 BL = get_beamline_name("P51")
 PREFIX = BeamlinePrefix(BL)
@@ -29,7 +35,7 @@ def static_panda_path_provider2() -> PathProvider:
 
 def static_xsp_path_provider() -> PathProvider:
     return StaticPathProvider(
-        StaticFilenameProvider("xsp"),
+        AutoIncrementFilenameProvider("xsp"),
         PurePath("/dls/p51/data/2026/cm44254-2/tmp/"),
     )
 
