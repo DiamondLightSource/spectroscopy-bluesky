@@ -1,5 +1,5 @@
 import math as mt  # noqa: I001
-
+from typing import Any
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
 import numpy as np
@@ -23,6 +23,7 @@ from ophyd_async.fastcs.panda import (
     StaticSeqTableTriggerLogic,
 )
 from ophyd_async.plan_stubs import ensure_connected
+from ophyd_async.epics.core import epics_signal_rw
 from scanspec.specs import Fly, Line
 from collections.abc import Callable
 
@@ -45,6 +46,37 @@ from .common import (
     get_encoder_counts,
     setup_trajectory_scan_pvs,
 )
+
+
+def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
+    """
+    Prepare and monitor EPICS process variables (PVs) from a configuration dictionary.
+
+    This generator function iterates over a dictionary describing readable PVs,
+    creates EPICS signal objects with the appropriate data types, ensures they are
+    connected, and starts monitoring them.
+
+    Args:
+        readable_pvs : dict[str, Any]
+            Dictionary defining PV configurations. Each value has the following keys:
+                - "pv_name" (str): The EPICS PV identifier.
+                - "datatype" (str): The data type name (e.g., "float"), which is mapped
+                internally to a Python type.
+
+    Returns:
+        MsgGenerator
+
+
+    Notes:
+    - Currently supports a limited set of data types via `type_map`.
+
+    """
+    type_map = {"float": float}
+    for pv_key, pv_config in readable_pvs.items():
+        datatype = type_map[pv_config["datatype"]]
+        pv_signal = epics_signal_rw(datatype, pv_config["pv_name"], name=pv_key)
+        yield from ensure_connected(pv_signal)
+        yield from bps.monitor(pv_signal, name=pv_key)
 
 
 def prepare_seq_table(
@@ -109,6 +141,8 @@ def seq_table_non_linear(
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
     number_of_sweeps: int = 1,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
 
@@ -126,6 +160,8 @@ def seq_table_non_linear(
         panda,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
     )
 
 
@@ -136,6 +172,8 @@ def seq_table_energy_scan(
     motor: Motor,
     panda: HDFPanda,
     number_of_sweeps: int = 1,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # Generate triggers
     params = XasScanParameters(element, edge)
@@ -155,6 +193,8 @@ def seq_table_energy_scan(
         panda,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
     )
 
 
@@ -170,6 +210,8 @@ def seq_table_two_panda_scan(
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # setup a second seq table for 'spectrum based' triggering
     panda_dict = {}
@@ -199,6 +241,8 @@ def seq_table_two_panda_scan(
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
     )
 
 
@@ -214,6 +258,8 @@ def seq_table_uniform_scan(
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
 
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
@@ -244,6 +290,8 @@ def seq_table_uniform_scan(
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
     )
 
 
@@ -258,6 +306,8 @@ def seq_table_position_scan(
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
 
     time_per_traj_point = time_per_sweep / num_trajectory_points
@@ -305,7 +355,9 @@ def seq_table_position_scan(
     # if not already present).
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
-    yield from seq_table_scan(spec, panda_dict, motor=motor)
+    yield from seq_table_scan(
+        spec, panda_dict, motor=motor, readable_pvs=readable_pvs, metadata=metadata
+    )
 
 
 def seq_table_scan(
@@ -314,6 +366,8 @@ def seq_table_scan(
         HDFPanda, list[Callable[[], MsgGenerator]]
     ],  # dict containing functions to prepare each panda
     motor: Motor,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
 
@@ -327,8 +381,17 @@ def seq_table_scan(
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
 
+    _md = {
+        "plan_args": {
+            "detectors": {det.name for det in detectors},
+            "spec": repr(scan_spec),
+        },
+        **(metadata or {}),
+        **(readable_pvs or {}),
+    }
+
     @bpp.stage_decorator([*detectors])
-    @bpp.run_decorator()
+    @bpp.run_decorator(md=_md)
     def inner_plan():
         yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
 
@@ -336,6 +399,9 @@ def seq_table_scan(
         for preparer_funcs in panda_dict.values():
             for prepare in preparer_funcs:
                 yield from prepare()
+
+        if readable_pvs is not None:
+            yield from prepare_pvs(readable_pvs)
 
         yield from bps.declare_stream(*detectors, name="primary", collect=True)
 
