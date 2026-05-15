@@ -1,5 +1,7 @@
 import math as mt  # noqa: I001
 from typing import Any
+
+from collections.abc import Sequence
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
 import numpy as np
@@ -11,6 +13,12 @@ from ophyd_async.core import (
     DetectorTrigger,
     StandardFlyer,
     TriggerInfo,
+    EnumTypes,
+    Array1D,
+    Table,
+    StrictEnum,
+    SubsetEnum,
+    SupersetEnum,
 )
 from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
@@ -23,7 +31,7 @@ from ophyd_async.fastcs.panda import (
     StaticSeqTableTriggerLogic,
 )
 from ophyd_async.plan_stubs import ensure_connected
-from ophyd_async.epics.core import epics_signal_rw
+from ophyd_async.epics.core import epics_signal_r
 from scanspec.specs import Fly, Line
 from collections.abc import Callable
 
@@ -68,14 +76,49 @@ def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
 
 
     Notes:
-    - Currently supports a limited set of data types via `type_map`.
-
+    - Currently supports a limited set of data types via `datatype_map`.
     """
-    type_map = {"float": float}
+    datatype_map = {
+        "bool": bool,
+        "int": int,
+        "float": float,
+        "str": str,
+        "EnumTypes": EnumTypes,
+        "Array1D[np.bool_]": Array1D[np.bool_],
+        "Array1D[np.int8]": Array1D[np.int8],
+        "Array1D[np.uint8]": Array1D[np.uint8],
+        "Array1D[np.int16]": Array1D[np.int16],
+        "Array1D[np.uint16]": Array1D[np.uint16],
+        "Array1D[np.int32]": Array1D[np.int32],
+        "Array1D[np.uint32]": Array1D[np.uint32],
+        "Array1D[np.int64]": Array1D[np.int64],
+        "Array1D[np.uint64]": Array1D[np.uint64],
+        "Array1D[np.float32]": Array1D[np.float32],
+        "Array1D[np.float64]": Array1D[np.float64],
+        "np.ndarray": np.ndarray,
+        "Sequence[str]": Sequence[str],
+        "Sequence[StrictEnum]": Sequence[StrictEnum],
+        "Sequence[SubsetEnum]": Sequence[SubsetEnum],
+        "Sequence[SupersetEnum]": Sequence[SupersetEnum],
+        "Table": Table,
+    }
     for pv_key, pv_config in readable_pvs.items():
-        datatype = type_map[pv_config["datatype"]]
-        pv_signal = epics_signal_rw(datatype, pv_config["pv_name"], name=pv_key)
-        yield from ensure_connected(pv_signal)
+        datatype_str = pv_config["datatype"].strip()
+        if datatype_str not in datatype_map:
+            raise ValueError(f"Unsupported datatype: {datatype_str}")
+        datatype = datatype_map[datatype_str]
+
+        pv_signal = epics_signal_r(
+            datatype,
+            pv_config["pv_name"].strip(),
+            name=pv_key,
+        )
+
+        try:
+            yield from ensure_connected(pv_signal)
+        except Exception as e:
+            raise RuntimeError(f"Failed to connect PV '{pv_key}'") from e
+
         yield from bps.monitor(pv_signal, name=pv_key)
 
 
@@ -400,10 +443,10 @@ def seq_table_scan(
             for prepare in preparer_funcs:
                 yield from prepare()
 
+        yield from bps.declare_stream(*detectors, name="primary", collect=True)
+
         if readable_pvs is not None:
             yield from prepare_pvs(readable_pvs)
-
-        yield from bps.declare_stream(*detectors, name="primary", collect=True)
 
         for panda in detectors:
             yield from bps.kickoff(panda)
