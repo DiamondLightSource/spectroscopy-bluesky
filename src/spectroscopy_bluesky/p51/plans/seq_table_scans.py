@@ -1,5 +1,7 @@
 import math as mt  # noqa: I001
 from typing import Any
+
+from collections.abc import Sequence
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
 import numpy as np
@@ -11,6 +13,12 @@ from ophyd_async.core import (
     DetectorTrigger,
     StandardFlyer,
     TriggerInfo,
+    EnumTypes,
+    Array1D,
+    Table,
+    StrictEnum,
+    SubsetEnum,
+    SupersetEnum,
 )
 from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
@@ -23,6 +31,7 @@ from ophyd_async.fastcs.panda import (
     SeqTableInfo,
     StaticSeqTableTriggerLogic,
 )
+from ophyd_async.epics.core import epics_signal_r
 from ophyd_async.plan_stubs import ensure_connected
 from scanspec.specs import Fly, Line, Concat, Product
 from collections.abc import Callable
@@ -40,12 +49,110 @@ from spectroscopy_bluesky.common.quantity_conversion import (
 from spectroscopy_bluesky.p51.plans.sequence_table import (
     SeqTableBuilder,
     SpectrumBasedTrigger,
+    SpectrumTriggerType,
 )
 
 from .common import (
     get_encoder_counts,
     setup_trajectory_scan_pvs,
 )
+
+
+# output_ports, pulse_width, output_delay, num_repeats, type, trigger_repeat
+TriggerSpec = tuple[list[int], float, float, int, int, int]
+
+
+def generate_triggers(
+    triggers: list[TriggerSpec],
+) -> list[SpectrumBasedTrigger]:
+    spectrum_triggers = []
+    for (
+        output_ports,
+        pulse_width,
+        output_delay,
+        output_num_repeats,
+        trigger_type,
+        trigger_repeat,
+    ) in triggers:
+        for _ in range(trigger_repeat):
+            spectrum_triggers.append(
+                SpectrumBasedTrigger(
+                    spectrum_number=1,
+                    trigger_type=SpectrumTriggerType(trigger_type),
+                    output_ports=output_ports,
+                    output_length=pulse_width,
+                    output_delay=output_delay,
+                    output_num_repeats=output_num_repeats,
+                )
+            )
+
+    return spectrum_triggers
+
+
+def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
+    """
+    Prepare and monitor EPICS process variables (PVs) from a configuration dictionary.
+
+    This generator function iterates over a dictionary describing readable PVs,
+    creates EPICS signal objects with the appropriate data types, ensures they are
+    connected, and starts monitoring them.
+
+    Args:
+        readable_pvs : dict[str, Any]
+            Dictionary defining PV configurations. Each value has the following keys:
+                - "pv_name" (str): The EPICS PV identifier.
+                - "datatype" (str): The data type name (e.g., "float"), which is mapped
+                internally to a Python type.
+
+    Returns:
+        MsgGenerator
+
+
+    Notes:
+    - Currently supports a limited set of data types via `datatype_map`.
+    """
+    datatype_map = {
+        "bool": bool,
+        "int": int,
+        "float": float,
+        "str": str,
+        "EnumTypes": EnumTypes,
+        "Array1D[np.bool_]": Array1D[np.bool_],
+        "Array1D[np.int8]": Array1D[np.int8],
+        "Array1D[np.uint8]": Array1D[np.uint8],
+        "Array1D[np.int16]": Array1D[np.int16],
+        "Array1D[np.uint16]": Array1D[np.uint16],
+        "Array1D[np.int32]": Array1D[np.int32],
+        "Array1D[np.uint32]": Array1D[np.uint32],
+        "Array1D[np.int64]": Array1D[np.int64],
+        "Array1D[np.uint64]": Array1D[np.uint64],
+        "Array1D[np.float32]": Array1D[np.float32],
+        "Array1D[np.float64]": Array1D[np.float64],
+        "np.ndarray": np.ndarray,
+        "Sequence[str]": Sequence[str],
+        "Sequence[StrictEnum]": Sequence[StrictEnum],
+        "Sequence[SubsetEnum]": Sequence[SubsetEnum],
+        "Sequence[SupersetEnum]": Sequence[SupersetEnum],
+        "Table": Table,
+    }
+    for pv_key, pv_config in readable_pvs.items():
+        datatype_str = pv_config["datatype"].strip()
+        if datatype_str not in datatype_map:
+            raise ValueError(f"Unsupported datatype: {datatype_str}")
+        datatype = datatype_map[datatype_str]
+
+        pv_signal = epics_signal_r(
+            datatype,
+            pv_config["pv_name"].strip(),
+            name=pv_key,
+        )
+
+        try:
+            yield from ensure_connected(pv_signal)
+        except Exception as e:
+            raise RuntimeError(f"Failed to connect PV '{pv_key}'") from e
+
+        yield from bps.monitor(pv_signal, name=pv_key)
 
 
 def prepare_seq_table(
@@ -110,6 +217,7 @@ def seq_table_non_linear(
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
     number_of_sweeps: int = 1,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # Start the plan by loading the saved design for this scan
@@ -128,6 +236,7 @@ def seq_table_non_linear(
         panda,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
+        readable_pvs=readable_pvs,
         metadata=metadata,
     )
 
@@ -136,10 +245,13 @@ def seq_table_energy_scan(
     element: str,
     edge: str,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     number_of_sweeps: int = 1,
     variable_exafs_time: bool = False,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     prescale_as_us = 1
@@ -176,6 +288,7 @@ def seq_table_energy_scan(
         prescale_as_us=prescale_as_us,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
+        readable_pvs=readable_pvs,
         metadata=md,
     )
 
@@ -185,18 +298,22 @@ def seq_table_two_panda_scan(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
-    panda2: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
+    panda2: HDFPanda = inject("panda2"),  # noqa: B008
     num_trajectory_points: int = 10,
-    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    triggers: list[TriggerSpec] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # setup a second seq table for 'spectrum based' triggering
     panda_dict = {}
-    if spectrum_triggers is not None:
+    if triggers is not None:
+        spectrum_triggers = generate_triggers(triggers)
         seq_table = (
             SeqTableBuilder()
             .add_spectrum_based_triggers(spectrum_triggers)
@@ -222,6 +339,7 @@ def seq_table_two_panda_scan(
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
+        readable_pvs=readable_pvs,
         metadata=metadata,
     )
 
@@ -231,11 +349,12 @@ def panda_step_scan(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     num_trajectory_points: int = 10,
     number_of_sweeps: int = 4,
     add_sweep_triggers: bool = False,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     time_per_traj_point = time_per_sweep / num_trajectory_points
@@ -260,6 +379,7 @@ def panda_step_scan(
         add_sweep_triggers,
         number_of_sweeps,
         scan_spec=scan_spec,
+        readable_pvs=readable_pvs,
         metadata=metadata,
     )
 
@@ -269,12 +389,13 @@ def variable_motor_speed_scan(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
     velocity: list[float],
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     num_trajectory_points: int = 10,
     number_of_sweeps: int = 4,
     add_sweep_triggers: bool = False,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
@@ -316,6 +437,7 @@ def variable_motor_speed_scan(
         scan_spec=spec,
         ramp_time=0,
         turnaround_time=0.02,
+        readable_pvs=readable_pvs,
         metadata=metadata,
     )
 
@@ -325,12 +447,13 @@ def configurable_rampup_turnaround(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     num_trajectory_points: int = 10,
     number_of_sweeps: int = 4,
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     yield from seq_table_uniform_scan(
@@ -344,6 +467,7 @@ def configurable_rampup_turnaround(
         number_of_sweeps=number_of_sweeps,
         ramp_time=ramp_time,
         turnaround_time=turnaround_time,
+        readable_pvs=readable_pvs,
         metadata=metadata,
     )
 
@@ -353,23 +477,26 @@ def seq_table_uniform_scan(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     num_trajectory_points: int = 10,
-    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    spectrum_triggers: list[TriggerSpec] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
 
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
     # setup a second seq table for 'spectrum based' triggering :
-    panda_dict = {}
+    if panda_dict is None:
+        panda_dict = {}
     if spectrum_triggers is not None:
+        spectrum_triggers = generate_triggers(spectrum_triggers)
         seq_table = (
             SeqTableBuilder()
             .add_spectrum_based_triggers(spectrum_triggers)
@@ -394,6 +521,7 @@ def seq_table_uniform_scan(
         panda_dict=panda_dict,
         ramp_time=ramp_time,
         turnaround_time=turnaround_time,
+        readable_pvs=readable_pvs,
         metadata=metadata,
     )
 
@@ -403,8 +531,8 @@ def seq_table_position_scan(
     stop: float,
     time_per_sweep: float,
     capture_positions: NDArray,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     num_trajectory_points: int = 10,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
@@ -414,6 +542,7 @@ def seq_table_position_scan(
     scan_spec: Fly | None = None,
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     if scan_spec is None:
@@ -477,7 +606,13 @@ def seq_table_position_scan(
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
     yield from seq_table_scan(
-        scan_spec, panda_dict, motor, ramp_time, turnaround_time, metadata=metadata
+        scan_spec,
+        panda_dict,
+        motor,
+        ramp_time,
+        turnaround_time,
+        metadata=metadata,
+        readable_pvs=readable_pvs,
     )
 
 
@@ -486,9 +621,10 @@ def seq_table_scan(
     panda_dict: dict[
         HDFPanda, list[Callable[[], MsgGenerator]]
     ],  # dict containing functions to prepare each panda
-    motor: Motor,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     ramp_time: float | None = None,
     turnaround_time: float | None = None,
+    readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
@@ -514,6 +650,7 @@ def seq_table_scan(
             "turnaround_time": repr(turnaround_time),
         },
         **(metadata or {}),
+        **(readable_pvs or {}),
     }
 
     @bpp.stage_decorator([*detectors])

@@ -14,6 +14,8 @@ from ophyd_async.plan_stubs import ensure_connected
 from spectroscopy_bluesky.p51.plans import (
     configurable_rampup_turnaround,
     panda_step_scan,
+    restore_panda2_settings,
+    restore_panda_settings,
     seq_table_energy_scan,
     seq_table_two_panda_scan,
     seq_table_uniform_scan,
@@ -73,15 +75,26 @@ def two_seq_tables_plan() -> MsgGenerator:
 
     yield from seq_table_uniform_scan(
         0,
+        10,
+        1,
         5,
-        1.0,
-        5.0,
         num_trajectory_points=10,
-        number_of_sweeps=6,
+        number_of_sweeps=4,
         add_sweep_triggers=True,
-        spectrum_triggers=generate_test_triggers(),
+        spectrum_triggers=[
+            [[1, 2], 0.0001, 0, 1, 0, 1],
+            [[1, 2], 0.0001, 0, 1, 0, 1],
+            [[1, 2], 0.0001, 0, 1, 0, 1],
+        ],
         motor=ts,
         panda=p,
+        metadata={"user_comments": "this is test"},
+        readable_pvs={
+            "motor_readback": {
+                "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.RBV",
+                "pv_datatype": "float",
+            }
+        },
     )
 
 
@@ -97,7 +110,15 @@ def seq_table_two_panda_plan() -> MsgGenerator:
         time_per_sweep=2,
         add_sweep_triggers=True,
         number_of_sweeps=10,
-        spectrum_triggers=generate_test_triggers(),
+        num_trajectory_points=10,
+        triggers=[
+            [[1, 2], 0.0001, 0, 1, 0, 1],
+            [[1, 2], 0.0001, 0, 1, 0, 1],
+            [[1, 2], 0.0001, 0, 1, 0, 1],
+        ],
+        ramp_time=0.0001,
+        turnaround_time=0.0001,
+        metadata={"user_comments": "this is inter-panda trigger test"},
         motor=ts,
         panda=p,
         panda2=p2,
@@ -112,6 +133,8 @@ def energy_scan_constant_time() -> MsgGenerator:
         time_per_sweep=8,
         motor=ts,
         panda=p,
+        number_of_sweeps=1,
+        metadata={"usercomments": "this is a test"},
     )
 
 
@@ -186,11 +209,24 @@ def add_metadata() -> MsgGenerator:
     )
 
 
+def restore_settings() -> MsgGenerator:
+    yield from restore_panda_settings(
+        restore_settings=False, restore_dataset_settings=True, store_settings=False
+    )
+
+
+def restore_panda2() -> MsgGenerator:
+    yield from restore_panda2_settings(
+        restore_settings=False, restore_dataset_settings=True, store_settings=False
+    )
+
+
 RE(two_seq_tables_plan())
-RE(seq_table_two_panda_plan())
-RE(energy_scan_variable_time())
-RE(energy_scan_constant_time())
-RE(variable_motor_speed_plan())
-RE(step_scan_with_panda())
-RE(configurable_rampup_turnaround_plan())
-RE(add_metadata())
+# RE(restore_panda2())
+# RE(seq_table_two_panda_plan())
+# RE(energy_scan_variable_time())
+# RE(energy_scan_constant_time())
+# RE(variable_motor_speed_plan())
+# RE(step_scan_with_panda())
+# RE(configurable_rampup_turnaround_plan())
+# RE(add_metadata())

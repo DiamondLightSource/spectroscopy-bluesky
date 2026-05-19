@@ -1,5 +1,6 @@
 from .common import (
     plan_store_settings,
+    restore_panda2_settings,
     restore_panda_settings,
 )
 from .seq_table_scans import (
@@ -25,13 +26,14 @@ __all__ = [
     "fly_sweep_both_ways",
     "seq_table_non_linear",
     "seq_table_uniform_scan",
+    "seq_table_two_panda_scan",
+    "seq_table_energy_scan",
     "trajectory_fly_scan",
     "prepare_seq_table",
     "restore_panda_settings",
+    "restore_panda2_settings",
     "plan_store_settings",
-    "variable_motor_speed_scan",
-    "panda_step_scan",
     "configurable_rampup_turnaround",
-    "seq_table_energy_scan",
-    "seq_table_two_panda_scan",
+    "panda_step_scan",
+    "variable_motor_speed_scan",
 ]
