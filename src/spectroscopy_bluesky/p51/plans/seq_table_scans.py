@@ -203,32 +203,6 @@ def seq_table_two_panda_scan(
     )
 
 
-def configurable_rampup_turnaround(
-    start: float,
-    stop: float,
-    stepsize: float,
-    time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
-    num_trajectory_points: int = 10,
-    number_of_sweeps: int = 4,
-    ramp_time: float | None = None,
-    turnaround_time: float | None = None,
-) -> MsgGenerator:
-    yield from seq_table_uniform_scan(
-        start,
-        stop,
-        stepsize,
-        time_per_sweep,
-        motor,
-        panda,
-        num_trajectory_points,
-        number_of_sweeps=number_of_sweeps,
-        ramp_time=ramp_time,
-        turnaround_time=turnaround_time,
-    )
-
-
 def seq_table_uniform_scan(
     start: float,
     stop: float,
