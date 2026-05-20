@@ -324,8 +324,7 @@ def seq_table_scan(
     for detector in detectors:
         yield from ensure_connected(detector)
 
-    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
-    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
+    pmac_trajectory_flyer = PmacTrajectoryTriggerLogic(pmac)
 
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator()
