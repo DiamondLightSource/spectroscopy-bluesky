@@ -32,13 +32,6 @@ const_ev_to_angstrom: float = Planck * speed_of_light / (angstrom * elementary_c
 """ Conversion factor from energy in eV to wavelength in Angstroms"""
 
 
-
-# @overload
-# def ev_to_wavelength(x: Scalar) -> float: ...
-
-# @overload
-# def ev_to_wavelength(x: Arr) -> Arr: ...
-
 def ev_to_wavelength(energy_ev: T) -> T:
     """Convert from energy (eV) to wavelength (Angstroms)
 
@@ -101,6 +94,7 @@ def bragg_angle_to_wavelength(
     """
     return cast(T, 2 * lattice_spacing * np.sin(np.radians(angle_deg)) / angstrom)
 
+
 def energy_to_bragg_angle(
     lattice_spacing: float,
     energy_ev: T,
@@ -162,9 +156,9 @@ def wavelength_to_bragg_angle(
         val = np.float32(val)
 
     too_big = False
-    if type(val) is float|int and val > 1:
+    if type(val) is float | int and val > 1:
         too_big = True
-    if type(val) is NDArray and (val>1).any():
+    if type(val) is NDArray and (val > 1).any():
         too_big = True
 
     if too_big:
