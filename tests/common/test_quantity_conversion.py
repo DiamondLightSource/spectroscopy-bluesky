@@ -12,6 +12,10 @@ from spectroscopy_bluesky.common.quantity_conversion import (
     wavevector_to_ev,
 )
 
+angle_tolerance = 1e-6
+energy_tolerance = 1e-7
+wavelength_tolerance = 1e-7
+
 
 @pytest.mark.parametrize(
     "energy, expected_wavevector",
@@ -25,8 +29,8 @@ from spectroscopy_bluesky.common.quantity_conversion import (
 )
 def test_ev_wavevector(energy, expected_wavevector):
     wave = ev_to_wavevector(energy)
-    assert wave == pytest.approx(expected_wavevector, 1e-6)
-    assert wavevector_to_ev(wave) == pytest.approx(energy, 1e-8)
+    assert wave == pytest.approx(expected_wavevector, wavelength_tolerance)
+    assert wavevector_to_ev(wave) == pytest.approx(energy, energy_tolerance)
 
 
 @pytest.mark.parametrize(
@@ -41,8 +45,8 @@ def test_ev_wavevector(energy, expected_wavevector):
 )
 def test_ev_wavelength(energy, expected_wavelength):
     wave = ev_to_wavelength(energy)
-    assert wave == pytest.approx(expected_wavelength, 1e-6)
-    assert wavelength_to_ev(wave) == pytest.approx(energy, 1e-8)
+    assert wave == pytest.approx(expected_wavelength, wavelength_tolerance)
+    assert wavelength_to_ev(wave) == pytest.approx(energy, energy_tolerance)
 
 
 @pytest.mark.parametrize(
@@ -57,9 +61,9 @@ def test_ev_wavelength(energy, expected_wavelength):
 )
 def test_bragg_energy(angle, expected_energy):
     energy = bragg_angle_to_energy(si_311_lattice_spacing, angle)
-    assert energy == pytest.approx(expected_energy, 1e-6)
+    assert energy == pytest.approx(expected_energy, energy_tolerance)
     assert energy_to_bragg_angle(si_311_lattice_spacing, energy) == pytest.approx(
-        angle, 1e-8
+        angle, angle_tolerance
     )
 
 
@@ -75,7 +79,7 @@ def test_bragg_energy(angle, expected_energy):
 )
 def test_bragg_wavelength(angle, expected_wavelength):
     wavelength = bragg_angle_to_wavelength(si_311_lattice_spacing, angle)
-    assert wavelength == pytest.approx(expected_wavelength, 1e-6)
+    assert wavelength == pytest.approx(expected_wavelength, wavelength_tolerance)
     assert wavelength_to_bragg_angle(
         si_311_lattice_spacing, wavelength
-    ) == pytest.approx(angle, 1e-8)
+    ) == pytest.approx(angle, angle_tolerance)

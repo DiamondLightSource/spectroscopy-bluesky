@@ -3,6 +3,7 @@ import socket
 
 import bluesky.plan_stubs as bps
 from bluesky.callbacks.best_effort import BestEffortCallback
+from bluesky.protocols import Reading
 from bluesky.run_engine import RunEngine
 from ophyd_async.core import init_devices
 from ophyd_async.epics.motor import Motor
@@ -97,7 +98,8 @@ else:
     d7diode.precision = 10
 
     # update centre position of Gaussian when Bragg angle changes
-    def update_centre(bragg_angle):
+    def update_gaussian_centre(reading_dict: dict[str, Reading]):
+        bragg_angle = reading_dict[bragg_motor.name]["value"]
         gaussian_generator.function_params[2] = float(undulator_gap_value(bragg_angle))
         print(
             f"Gaussian centre for Bragg angle "
@@ -105,11 +107,15 @@ else:
             f"{bragg_angle:.4f}"
         )
 
+    def update_gaussian_x(reading_dict: dict[str, Reading]):
+        motor_pos = reading_dict[undulator_gap_motor.name]["value"]
+        gaussian_generator.set_x(motor_pos)
+
     # Update x, and centre position of curve when bragg angle changes
     def subscribe_values():
         yield from bps.sleep(0)  # to keep RunEngine happy
-        bragg_motor.user_readback.subscribe_value(update_centre)
-        undulator_gap_motor.user_readback.subscribe_value(gaussian_generator.set_x)
+        bragg_motor.user_readback.subscribe(update_gaussian_centre)
+        undulator_gap_motor.user_readback.subscribe(update_gaussian_x)
 
     RE(subscribe_values())
 
