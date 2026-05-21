@@ -1,8 +1,6 @@
 import bluesky.plan_stubs as bps
 from bluesky.utils import MsgGenerator
-from ophyd_async.core import (
-    YamlSettingsProvider,
-)
+from ophyd_async.core import Settings, YamlSettingsProvider
 from ophyd_async.epics.core import epics_signal_rw
 from ophyd_async.fastcs.panda import (
     HDFPanda,
@@ -92,10 +90,11 @@ def plan_restore_dataset_settings(panda: HDFPanda, name: str):
             and any(k in signal.name for k in ["out", "val", "pos"])
         )
     )
-    new_dataset = {
+    settings_dict = {
         signal: (value if value else signal.name.replace(".", "_"))
         for signal, value in dataset.items()
     }
+    new_dataset = Settings(panda, settings_dict)
     yield from apply_settings(new_dataset)
 
 
