@@ -2,7 +2,7 @@
 
 import typer
 from bluesky import RunEngine
-from dodal.beamlines.p51 import panda1, turbo_slit
+from dodal.beamlines.p51 import panda1, path_provider, turbo_slit_x
 from ophyd_async.plan_stubs import ensure_connected
 
 from spectroscopy_bluesky.p51.plans.seq_table_scans import (
@@ -38,10 +38,10 @@ _duration = typer.Option(
 _sweeps = typer.Option(help="Number of sweeps", default=1)
 
 # Create the PMAC and Panda objects making sure they're connected
-t = turbo_slit()
-p = panda1()
+p = panda1(path_provider())
+ts = turbo_slit_x()
 RE = RunEngine()
-RE(ensure_connected(t, p))
+RE(ensure_connected(ts, p))
 
 
 @app.command()
@@ -64,7 +64,7 @@ def case_2(
             de=step,
             time_per_sweep=time_per_sweep,
             panda=p,
-            restore=False,
+            motor=ts,
         )
     )
 
@@ -90,6 +90,7 @@ def case_1(
             stepsize=stepsize,
             time_per_sweep=time_per_sweep,
             panda=p,
+            motor=ts,
             number_of_sweeps=sweeps,
         )
     )
@@ -116,6 +117,7 @@ def case_1_pcomp(
             num=num,
             duration=duration,
             panda=p,
+            motor=ts,
         )
     )
 
@@ -140,6 +142,7 @@ def fly_scan(
             num=num,
             duration=duration,
             panda=p,
+            motor=ts,
             number_of_sweeps=sweeps,
         )
     )
