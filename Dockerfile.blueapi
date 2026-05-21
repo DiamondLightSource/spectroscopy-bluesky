@@ -7,7 +7,6 @@ USER root
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN uv pip install --no-cache-dir --no-compile \
-    spectroscopy-bluesky \
     xraydb \
     scipy
 
