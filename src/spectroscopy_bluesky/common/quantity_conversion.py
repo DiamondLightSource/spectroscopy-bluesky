@@ -5,7 +5,7 @@ e.g. convert energy to wavelength, energy to wavevector, Bragg angle to waveleng
 """
 
 import math
-from typing import TypeAlias
+from typing import TypeVar, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -19,8 +19,11 @@ from scipy.constants import (
     speed_of_light,
 )
 
-ndarray_or_number: TypeAlias = NDArray | float | int
+ArrayOrScalar = int | float | np.floating | NDArray[np.floating]
 """ type representing an int, a float or a numpy array """
+
+T = TypeVar("T", bound=ArrayOrScalar)
+
 
 lattice_parameter_si: float = physical_constants["lattice parameter of silicon"][0]
 """ Lattice parameter of Si (at temperature of 22.5C) """
@@ -29,7 +32,7 @@ const_ev_to_angstrom: float = Planck * speed_of_light / (angstrom * elementary_c
 """ Conversion factor from energy in eV to wavelength in Angstroms"""
 
 
-def ev_to_wavelength(energy_ev: ndarray_or_number) -> ndarray_or_number:
+def ev_to_wavelength(energy_ev: T) -> T:
     """Convert from energy (eV) to wavelength (Angstroms)
 
     Args:
@@ -38,10 +41,10 @@ def ev_to_wavelength(energy_ev: ndarray_or_number) -> ndarray_or_number:
     Returns:
         NDAarray|float|int: wavelength (Angstroms)
     """
-    return const_ev_to_angstrom / energy_ev
+    return cast(T, const_ev_to_angstrom / energy_ev)
 
 
-def wavelength_to_ev(wavelength_angstrom: ndarray_or_number) -> ndarray_or_number:
+def wavelength_to_ev(wavelength_angstrom: T) -> T:
     """Convert from wavelength (Angstroms) to energy (eV)
 
     Args:
@@ -50,7 +53,7 @@ def wavelength_to_ev(wavelength_angstrom: ndarray_or_number) -> ndarray_or_numbe
     Returns:
         NDAarray|float|int: energy (eV)
     """
-    return const_ev_to_angstrom / wavelength_angstrom
+    return cast(T, const_ev_to_angstrom / wavelength_angstrom)
 
 
 def crystal_spacing(lattice_parameter: float, miller_indices: list[int]) -> float:
@@ -78,8 +81,8 @@ def crystal_spacing(lattice_parameter: float, miller_indices: list[int]) -> floa
 
 def bragg_angle_to_wavelength(
     lattice_spacing: float,
-    angle_deg: ndarray_or_number,
-) -> NDArray:
+    angle_deg: T,
+) -> T:
     """Convert from Bragg angle (degrees) to wavelength (Angstroms)
 
     Args:
@@ -89,14 +92,14 @@ def bragg_angle_to_wavelength(
     Returns:
         NDArray|float|int: wavelength (Angstroms)
     """
-    return 2 * lattice_spacing * np.sin(np.radians(angle_deg)) / angstrom
+    return cast(T, 2 * lattice_spacing * np.sin(np.radians(angle_deg)) / angstrom)
 
 
 def energy_to_bragg_angle(
     lattice_spacing: float,
-    energy_ev: ndarray_or_number,
+    energy_ev: T,
     return_radians=False,
-) -> NDArray:
+) -> T:
     """Convert photon energy (eV) to Bragg angle
     (using :func:`ev_to_wavelength` and :func:`wavelength_to_bragg_angle`)
 
@@ -109,13 +112,13 @@ def energy_to_bragg_angle(
         NDArray: _description_
     """
     wavelength = ev_to_wavelength(energy_ev)
-    return wavelength_to_bragg_angle(lattice_spacing, wavelength, return_radians=False)
+    return wavelength_to_bragg_angle(lattice_spacing, wavelength, return_radians)
 
 
 def bragg_angle_to_energy(
     lattice_spacing: float,
-    bragg_angle_degrees: ndarray_or_number,
-) -> ndarray_or_number:
+    bragg_angle_degrees: ArrayOrScalar,
+) -> ArrayOrScalar:
     """Convert Bragg angle (degrees) to energy (ev)
 
     Args:
@@ -131,9 +134,9 @@ def bragg_angle_to_energy(
 
 def wavelength_to_bragg_angle(
     lattice_spacing: float,
-    wavelength_angstroms: ndarray_or_number,
+    wavelength_angstroms: T,
     return_radians=False,
-) -> NDArray:
+) -> T:
     """Convert wavelength (Angstroms) to Bragg angle (radians, degrees)
 
     Args:
@@ -152,17 +155,23 @@ def wavelength_to_bragg_angle(
     if isinstance(val, float):
         val = np.float32(val)
 
-    if (val > 1).any():
+    too_big = False
+    if type(val) is float | int and val > 1:
+        too_big = True
+    if type(val) is NDArray and (val > 1).any():
+        too_big = True
+
+    if too_big:
         raise Exception(
             f"Wavelength {wavelength_angstroms} Angstroms is too large for "
             "lattice spacing {lattice_spacing/angstrom} Angstroms!",
         )
 
     theta = np.asin(val)
-    return theta if return_radians else np.degrees(theta)
+    return cast(T, theta if return_radians else np.degrees(theta))
 
 
-def wavevector_to_ev(wavevec_inverse_angstrom: ndarray_or_number) -> ndarray_or_number:
+def wavevector_to_ev(wavevec_inverse_angstrom: T) -> T:
     """Convert from wavevector (inverse Angstroms) to photon energy (eV) using
     E = (hbar*k)**2 / 2m
 
@@ -172,12 +181,14 @@ def wavevector_to_ev(wavevec_inverse_angstrom: ndarray_or_number) -> ndarray_or_
     Returns:
         NDAarray|float|int: photon energy (eV)
     """
-    return ((hbar * wavevec_inverse_angstrom / angstrom) ** 2) / (
-        2 * electron_mass * elementary_charge
+    return cast(
+        T,
+        ((hbar * wavevec_inverse_angstrom / angstrom) ** 2)
+        / (2 * electron_mass * elementary_charge),
     )
 
 
-def ev_to_wavevector(energy_ev: ndarray_or_number) -> ndarray_or_number:
+def ev_to_wavevector(energy_ev: T) -> T:
     """Convert from photon energy (eV) to wavevector (inverse Angstroms) using
     E = (hbar*k)**2 / 2m  -> k = sqrt(2mE/hbar)
 
@@ -189,7 +200,7 @@ def ev_to_wavevector(energy_ev: ndarray_or_number) -> ndarray_or_number:
     """
     wave_vec_si = np.sqrt(2.0 * electron_mass * elementary_charge * energy_ev) / hbar
 
-    return wave_vec_si * angstrom
+    return cast(T, wave_vec_si * angstrom)
 
 
 si_111_lattice_spacing = crystal_spacing(lattice_parameter_si, [1, 1, 1])

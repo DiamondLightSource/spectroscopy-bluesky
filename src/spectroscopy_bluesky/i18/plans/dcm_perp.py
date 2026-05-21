@@ -3,19 +3,19 @@ import numexpr as ne
 
 class ExpressionEvaluator:
     def __init__(self):
-        self.expression = None
-        self.expression_param_name = None
+        self.expression: str = ""
+        self.expression_param_name: str = ""
 
-    def __call__(self, value):
+    def __call__(self, value: str):
         return self.evalute(value)
 
-    def evalute(self, value):
+    def evalute(self, value: str):
         return ne.evaluate(
             self.expression, local_dict={self.expression_param_name: value}
         ).item()
 
 
-def load_dcm_perp(filename):
+def load_dcm_perp(filename: str):
     line_with_expr = "ExpressionStoT"
     replacements = {
         "<" + line_with_expr + ">": "",
