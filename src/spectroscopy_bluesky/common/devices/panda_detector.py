@@ -1,5 +1,4 @@
 import asyncio  # noqa: I001
-import logging
 
 from bluesky.protocols import Preparable, Triggerable
 from ophyd_async.core import (
@@ -19,28 +18,26 @@ from spectroscopy_bluesky.common.panda_data_socket import DataSocket
 
 class PandaDetector(StandardReadable, Preparable, Triggerable):
     def __init__(
-        self, name: str, panda_device: HDFPanda, data_dict: dict[str, str] | None = None
+        self,
+        name: str,
+        panda_device: HDFPanda,
+        data_socket: DataSocket,
+        data_dict: dict[str, str] | None = None,
     ) -> None:
         self.panda_device = panda_device
         self.num_channels = 3
-        self.chan_data: DeviceVector | None = None
         self.frame_time: int = 1000
         self.dead_time: int = 10
         self.sleep_time: float = 0.0
         self.prescale_units: PandaTimeUnits = PandaTimeUnits.MS
         self.prescale: float = 1
         self.use_hdf_writer = False
-        self.data_socket: DataSocket | None = None
+        self.data_socket: DataSocket = data_socket
 
         """ Dict specifying data be read from the Panda data stream :
         key = name of signal name in this device, 
         value = name of field in Panda data stream """
-        self.socket_data_dict = (
-            data_dict  # {"counts1": "COUNTER1.OUT", "adc1": "FMC_IN.VAL1"}
-        )
-
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
+        self.socket_data_dict = data_dict if data_dict is not None else {}
 
         with self.add_children_as_readables():
             self.frame_counter = soft_signal_rw(int, initial_value=None, units=None)
@@ -68,6 +65,7 @@ class PandaDetector(StandardReadable, Preparable, Triggerable):
                 }
             )
 
+    @AsyncStatus.wrap
     async def prepare_panda(self):
         self.logger.info("Prepare panda")
         # make sure pcap and sequence table are stopped first
@@ -106,12 +104,13 @@ class PandaDetector(StandardReadable, Preparable, Triggerable):
             trigger_info.number_of_events = 0
             trigger_info.livetime = 1.0
             trigger_info.deadtime = 0.1
-            trigger_info.trigger = DetectorTrigger.INTERNAL
+            trigger_info.trigger = DetectorTrigger.EXTERNAL_LEVEL
 
             # arm the panda and start the hdf data writer
             await self.panda_device.prepare(trigger_info)
 
         self.logger.info("Arming PCap")
+        # same as PandaArmLogic called at end of StandardDetector.prepare
         await self.panda_device.pcap.arm.set(True)
         await wait_for_value(self.panda_device.pcap.active, True, 10)
 
@@ -128,25 +127,24 @@ class PandaDetector(StandardReadable, Preparable, Triggerable):
         self.data_socket.collect_data_in_thread()
 
     async def stop_panda(self):
+        self.logger.info("Stopping panda")
         if self.use_hdf_writer:
             await self.panda_device.unstage()
         else:
-            await self.panda_device.pcap.arm.set(0)
+            await self.panda_device.pcap.arm.set(False)
 
     @AsyncStatus.wrap
     async def stage(self) -> None:
-        self.count = 0
         await self.prepare_panda()
 
     @AsyncStatus.wrap
     async def unstage(self) -> None:
-        self.logger.debug("Unstage called")
         await self.stop_panda()
 
     @AsyncStatus.wrap
-    async def prepare(self, value) -> None:
-        self.logger.debug("prepare called", value)
-        pass
+    async def prepare(self, value: TriggerInfo) -> None:
+        self.logger.info(f"Prepare called {value}")
+        await self.prepare_panda()
 
     def total_num_frames(self) -> SignalR[int]:
         return self.panda_device.seq[1].line_repeat
@@ -160,12 +158,12 @@ class PandaDetector(StandardReadable, Preparable, Triggerable):
         self.logger.debug("Frame number before trigger : %d", num_frames_before_trigger)
 
         # Make sure pulse block is enabled
-        await self.panda_device.pulse[1].enable.set("ONE")
+        await self.panda_device.pulse[1].enable.set(PandaBitMux.ONE)
 
         # trigger 1 frame on sequence table by using pulse block
-        await self.panda_device.pulse[1].trig.set("ZERO")
+        await self.panda_device.pulse[1].trig.set(PandaBitMux.ZERO)
         await asyncio.sleep(self.sleep_time)
-        await self.panda_device.pulse[1].trig.set("ONE")
+        await self.panda_device.pulse[1].trig.set(PandaBitMux.ONE)
 
         # wait for line_repeat to increment
         self.logger.debug("Waiting for frame number to increment")
@@ -202,11 +200,6 @@ class PandaDetector(StandardReadable, Preparable, Triggerable):
             self.logger.debug(f"{name} {col} = {dat_val}")
             await self.chan_data[index].set(dat_val)
 
-    # @AsyncStatus.wrap
-    # async def read(self) -> dict[str, Reading]:
-    #     await self.update_readout_values()
-    #     return await super().read()
-
     @AsyncStatus.wrap
     async def kickoff(self) -> None:
         pass
@@ -214,8 +207,6 @@ class PandaDetector(StandardReadable, Preparable, Triggerable):
     @AsyncStatus.wrap
     async def complete(self) -> None:
         self.logger.debug("Complete called")
-        pass  # await self.panda_device.pcap.arm.set(0)
 
     def describe_collect(self):
         return super().describe()
-        # return {"stream_name": {"test"}}

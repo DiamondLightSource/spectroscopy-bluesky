@@ -29,7 +29,8 @@ class DataSocket:
         print(f"Server response {data}")
 
     def disconnect(self):
-        self.socket.close()
+        if self.socket is not None:
+            self.socket.close()
 
     def collect_data_in_thread(self):
         def collect_safe():
