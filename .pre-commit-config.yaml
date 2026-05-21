@@ -22,3 +22,10 @@ repos:
         entry: ruff format --force-exclude
         types: [python]
         require_serial: true
+      
+      - id: type-checking
+        name: type-checking with pyright
+        language: system
+        entry: pyright
+        types: [python]
+        require_serial: true

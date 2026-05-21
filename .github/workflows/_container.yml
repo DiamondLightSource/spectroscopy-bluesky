@@ -62,3 +62,16 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      ###############################
+      # BlueAPI Container Image Build
+      ###############################
+      
+      - name: Build and export Dockerfile.blueapi to local cache
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: true
+        with:
+          context: .
+          file: Dockerfile.blueapi
+          load: true
