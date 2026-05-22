@@ -3,13 +3,13 @@ _commit: 5.1.0
 _src_path: https://github.com/DiamondLightSource/python-copier-template.git
 author_email: subu.ghimire@diamond.ac.uk
 author_name: Subu Ghimire
-component_lifecycle: experimental
+component_lifecycle: production
 component_owner: group:default/daq
 component_type: library
 description: Plans to use at spectroscopy beamlines at DLS
 distribution_name: spectroscopy-bluesky
 docker: true
-docker_debug: false
+docker_debug: true
 docs_type: README
 git_platform: github.com
 github_org: DiamondLightSource
