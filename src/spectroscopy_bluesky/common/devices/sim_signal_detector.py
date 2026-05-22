@@ -2,7 +2,7 @@ import math
 import random
 from collections.abc import Callable
 
-from numpy import ndarray
+import numpy as np
 from numpy.typing import NDArray
 from ophyd_async.core import (
     AsyncStatus,
@@ -58,7 +58,7 @@ class FunctionPatternGenerator:
             x_value = self._x
         val = self.generate_value(x_value)
 
-        if isinstance(val, ndarray):
+        if isinstance(val, np.ndarray):
             val = val[0]
 
         if self.noise > 0:
