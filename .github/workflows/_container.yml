@@ -75,3 +75,33 @@ jobs:
           context: .
           file: Dockerfile.blueapi
           load: true
+      
+      - name: Create tags for publishing BlueAPI image
+        id: meta-blueapi
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}-blueapi
+          labels: |
+            org.opencontainers.image.title=spectroscopy-bluesky-blueapi
+            org.opencontainers.image.description=BlueAPI plans, stubs and utilities for spectroscopy beamlines
+          annotations: |
+            org.opencontainers.image.title=spectroscopy-bluesky-blueapi
+            org.opencontainers.image.description=BlueAPI plans, stubs and utilities for spectroscopy beamlines
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - name: Push cached BlueAPI image to container registry
+        if: github.ref_type == 'tag'
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: Dockerfile.blueapi
+          push: true
+          tags: ${{ steps.meta-blueapi.outputs.tags }}
+          labels: ${{ steps.meta-blueapi.outputs.labels }}
+          # Set the annotations to make the description appear in the GH repo page
+          annotations: ${{ steps.meta-blueapi.outputs.annotations }}
