@@ -6,5 +6,5 @@ metadata:
   description: Plans to use at spectroscopy beamlines at DLS
 spec:
   type: library
-  lifecycle: experimental
+  lifecycle: production
   owner: group:default/daq

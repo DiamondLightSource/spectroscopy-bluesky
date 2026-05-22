@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-from spectroscopy_bluesky import __version__
+from spectroscopy_bluesky._version import __version__
 
 
 def test_cli_version():

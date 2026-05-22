@@ -158,7 +158,7 @@ def wavelength_to_bragg_angle(
     too_big = False
     if type(val) is float | int and val > 1:
         too_big = True
-    if type(val) is NDArray and (val > 1).any():
+    if isinstance(val, np.ndarray) and (val > 1).any():  # type: ignore
         too_big = True
 
     if too_big:
