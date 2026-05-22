@@ -29,6 +29,7 @@ repos:
         language: system
         entry: pyright
         types: [python]
+        always_run: true
         require_serial: true
 
       - id: uv-sync

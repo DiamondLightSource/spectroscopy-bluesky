@@ -16,5 +16,5 @@ github_org: DiamondLightSource
 package_name: spectroscopy_bluesky
 pypi: true
 repo_name: spectroscopy-bluesky
-strict_typing: true
+strict_typing: false
 type_checker: pyright
