@@ -59,7 +59,7 @@ class FunctionPatternGenerator:
         val = self.generate_value(x_value)
 
         if isinstance(val, np.ndarray):
-            val = val[0]
+            val = val[0]  # type: ignore
 
         if self.noise > 0:
             val += self.rnd_generator() * self.noise
