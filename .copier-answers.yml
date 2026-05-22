@@ -1,8 +1,8 @@
 # Changes here will be overwritten by Copier
-_commit: 4.2.0
+_commit: 5.1.0
 _src_path: https://github.com/DiamondLightSource/python-copier-template.git
-author_email: iain.hall@diamond.ac.uk
-author_name: Iain Hall
+author_email: subu.ghimire@diamond.ac.uk
+author_name: Subu Ghimire
 component_lifecycle: experimental
 component_owner: group:default/daq
 component_type: library
