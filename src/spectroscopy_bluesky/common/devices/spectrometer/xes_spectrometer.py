@@ -1,8 +1,6 @@
 import asyncio
-import logging
 import math
 from dataclasses import dataclass
-from logging import Logger
 
 import numpy as np
 from bluesky.protocols import Movable
@@ -12,7 +10,6 @@ from ophyd_async.core import (
     Device,
     StandardReadable,
     soft_signal_r_and_setter,
-    soft_signal_rw,
 )
 from ophyd_async.core import StandardReadableFormat as Format
 from ophyd_async.epics.motor import Motor
