@@ -69,9 +69,14 @@ addopts = """
     --tb=native -vv
     """
 # https://iscinumpy.gitlab.io/post/bound-version-constraints/#watch-for-warnings
-filterwarnings = "error"
+filterwarnings = [
+    "error",
+    # See https://github.com/open-telemetry/opentelemetry-python/issues/5231
+    "ignore:SelectableGroups dict interface is deprecated:DeprecationWarning",
+]
 # Doctest python code in docs, python code in src docstrings, test functions in tests
 testpaths = "docs src tests"
+
 
 [tool.coverage.run]
 patch = ["subprocess"]
