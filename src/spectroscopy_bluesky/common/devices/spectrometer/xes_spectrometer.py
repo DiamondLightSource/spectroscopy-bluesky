@@ -294,9 +294,7 @@ class XesSpectrometerEnergy(StandardReadable, Movable[float]):
         if math.isnan(bragg_angle) or math.isinf(bragg_angle):
             raise ValueError(f"Could not convert energy {energy_ev}eV to Bragg angle")
 
-        self.log.info(
-            f"Moving {self.name} to {energy_ev} eV ({bragg_angle} degrees)"
-        )
+        self.log.info(f"Moving {self.name} to {energy_ev} eV ({bragg_angle} degrees)")
 
         self.xes_energy_setter(energy_ev)
 
