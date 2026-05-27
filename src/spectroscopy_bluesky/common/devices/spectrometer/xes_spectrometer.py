@@ -119,7 +119,7 @@ class DetectorDevice(SpectrometerComponentDevice, Movable[DetectorPosition]):
 
     @AsyncStatus.wrap
     async def set(self, position: DetectorPosition):
-        self.logger.info(f"Moving {self.name} to {position}s")
+        self.log.info(f"Moving {self.name} to {position}s")
         await self.move_to(position.get_positions())
 
 
@@ -137,7 +137,7 @@ class AnalyserDevice(SpectrometerComponentDevice, Movable[AnalyserPosition]):
 
     @AsyncStatus.wrap
     async def set(self, position: AnalyserPosition):
-        self.logger.debug(f"Moving {self.name} to {position}s")
+        self.log.debug(f"Moving {self.name} to {position}s")
         await self.move_to(position.get_positions())
 
 
@@ -151,7 +151,6 @@ class XesSpectrometerBragg(StandardReadable, Movable[float]):
     detector_move_tolerance: list[float]
     bragg_lower_limit: float
     bragg_upper_limit: float
-    # logger: Logger
 
     def __init__(
         self,
@@ -167,8 +166,6 @@ class XesSpectrometerBragg(StandardReadable, Movable[float]):
         self.trajectory_step_size = 0.02
         self.analyser_move_tolerance = [1, 1, 1, 1]
         self.detector_move_tolerance = [0, 0, 0]
-        # self.logger = logging.getLogger(name)
-        # self.logger.setLevel(logging.DEBUG)
         self.bragg_angle_rbv, self.bragg_angle_setter = soft_signal_r_and_setter(
             float, 90.0, units="deg"
         )
@@ -183,7 +180,7 @@ class XesSpectrometerBragg(StandardReadable, Movable[float]):
     async def set(self, bragg_angle_deg: float):
 
         # check Bragg angle is within range
-        self.logger.debug(f"Setting Bragg angle to {bragg_angle_deg}")
+        self.log.debug(f"Setting Bragg angle to {bragg_angle_deg}")
         if (
             bragg_angle_deg < self.bragg_lower_limit
             or bragg_angle_deg > self.bragg_upper_limit
@@ -199,7 +196,7 @@ class XesSpectrometerBragg(StandardReadable, Movable[float]):
         det_rotation = await self.detector_device.pitch_motor.user_readback.get_value()
         current_bragg_angle = self.xes_calculator.calculate_bragg_angle(det_rotation)
 
-        self.logger.debug(
+        self.log.debug(
             f"Current Bragg angle (from detector angle) : {current_bragg_angle}"
         )
 
@@ -218,7 +215,7 @@ class XesSpectrometerBragg(StandardReadable, Movable[float]):
             do_move = await self.detector_device.check_tolerance(
                 detpos, self.detector_move_tolerance
             )
-            self.logger.debug(
+            self.log.debug(
                 f"Moving {self.detector_device.name} to {detpos}. do move = {do_move}"
                 f"Current position : {currpos}"
             )
@@ -231,28 +228,28 @@ class XesSpectrometerBragg(StandardReadable, Movable[float]):
             )
             do_move = await c.check_tolerance(pos, self.analyser_move_tolerance)
 
-            self.logger.debug(f"Moving {c.name} to {pos} :")
-            self.logger.debug(
+            self.log.debug(f"Moving {c.name} to {pos} :")
+            self.log.debug(
                 f"Allowed to move = {c.allowed_to_move}, do move = {do_move}"
             )
             if do_move and c.allowed_to_move:
                 coros.append(c.set(AnalyserPosition(*pos)))
 
         # wait for all to finish moving
-        self.logger.info("Waiting for motor moves to finish")
+        self.log.info("Waiting for motor moves to finish")
         await asyncio.gather(*coros)
         self.bragg_angle_setter(bragg_angle_deg)
-        self.logger.info("Moves finished")
+        self.log.info("Moves finished")
 
     async def move_detector_trajectory(self, start_bragg: float, end_bragg: float):
-        self.logger.info(
+        self.log.info(
             f"Moving detector along trajectory between Bragg angles : {start_bragg} "
             f" and {end_bragg} degrees "
         )
         num_steps = abs(end_bragg - start_bragg) / self.trajectory_step_size
         for angle in np.linspace(start_bragg, end_bragg, int(num_steps)):
             detector_pos = self.xes_calculator.calculate_detector_position(angle)
-            self.logger.debug(
+            self.log.debug(
                 f"{self.detector_device.name} : {angle:.2f} -> {detector_pos}"
             )
             await self.detector_device.set(DetectorPosition(*detector_pos))
@@ -283,7 +280,6 @@ class XesSpectrometerEnergy(StandardReadable, Movable[float]):
 
         self.set_crystal_cut(crystal_cut)
 
-        # self.logger = logging.getLogger(name)
         super().__init__(name=name)
 
     def set_crystal_cut(self, crystal_cut: list[int]):
@@ -298,7 +294,7 @@ class XesSpectrometerEnergy(StandardReadable, Movable[float]):
         if math.isnan(bragg_angle) or math.isinf(bragg_angle):
             raise ValueError(f"Could not convert energy {energy_ev}eV to Bragg angle")
 
-        self.logger.info(
+        self.log.info(
             f"Moving {self.name} to {energy_ev} eV ({bragg_angle} degrees)"
         )
 
