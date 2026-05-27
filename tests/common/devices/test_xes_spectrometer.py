@@ -22,7 +22,7 @@ def compare_positions(
     print(f"Testing {filename}")
     correct_vals = read_file(filename)
     suffixes = "X", "Y", "Rot", "Pitch"
-    # for prefix, index in ("minus",-1), ("centre", 0), ("plus", 1) :
+
     for index in range(-index_range, index_range + 1):
         val = str(abs(index))
         if index < 0:

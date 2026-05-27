@@ -3,7 +3,6 @@ import math
 import pytest
 
 from spectroscopy_bluesky.common.quantity_conversion import (
-    angstrom,
     bragg_angle_to_energy,
     bragg_angle_to_wavelength,
     crystal_spacing,
@@ -101,7 +100,7 @@ def test_crystal_spacing(indices: list[int]):
 
 
 def test_too_large_wavelength_raises_exception():
-    wavelength = si_311_lattice_spacing * 4.0 / angstrom
+    wavelength = si_311_lattice_spacing * 4.0 / 1e-10
     with pytest.raises(ValueError):
         wavelength_to_bragg_angle(si_311_lattice_spacing, wavelength)
 
