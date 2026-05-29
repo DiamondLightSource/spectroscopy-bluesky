@@ -117,8 +117,8 @@ def energy_to_bragg_angle(
 
 def bragg_angle_to_energy(
     lattice_spacing: float,
-    bragg_angle_degrees: ArrayOrScalar,
-) -> ArrayOrScalar:
+    bragg_angle_degrees: T,
+) -> T:
     """Convert Bragg angle (degrees) to energy (ev)
 
     Args:

@@ -43,11 +43,11 @@ async def spectrometer_energy(
     )
 
 
-def out_of_range_angles(spectrometer_bragg: XesSpectrometerBragg):
-    return (
+def out_of_range_angles(spectrometer_bragg: XesSpectrometerBragg) -> list[float]:
+    return [
         spectrometer_bragg.bragg_lower_limit - 0.5,
         spectrometer_bragg.bragg_upper_limit + 0.5,
-    )
+    ]
 
 
 @pytest.mark.parametrize(
