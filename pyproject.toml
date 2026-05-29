@@ -40,6 +40,7 @@ dev = [
     "pyright",
     "pytest",
     "pytest-cov",
+    "pytest-asyncio",
     "ruff",
     "tox-uv",
     "types-mock",
@@ -76,7 +77,7 @@ filterwarnings = [
 ]
 # Doctest python code in docs, python code in src docstrings, test functions in tests
 testpaths = "docs src tests"
-
+asyncio_mode = "auto"
 
 [tool.coverage.run]
 patch = ["subprocess"]

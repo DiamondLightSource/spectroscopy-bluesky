@@ -24,16 +24,16 @@ from spectroscopy_bluesky.common.quantity_conversion import (
 
 class EnergyConvertor:
     miller_indices: list[int]
-    lattice_spacing: float
+    lattice_parameter: float
 
-    def __init__(self, miller_indices=None, lattice_spacing=lattice_parameter_si):
+    def __init__(self, miller_indices=None, lattice_parameter=lattice_parameter_si):
         self.miller_indices = (
             miller_indices if miller_indices is not None else [1, 1, 1]
         )
-        self.lattice_spacing = lattice_spacing
+        self.lattice_parameter = lattice_parameter
 
     def convert_to_bragg(self, energy_ev):
-        spacing = crystal_spacing(self.lattice_spacing, self.miller_indices)
+        spacing = crystal_spacing(self.lattice_parameter, self.miller_indices)
         return energy_to_bragg_angle(spacing, energy_ev)
 
 
@@ -164,7 +164,7 @@ class XesSpectrometerBragg(StandardReadable, Movable[float]):
         self.analyser_crystals = analysers
         self.detector_device = detector_device
         self.trajectory_step_size = 0.02
-        self.analyser_move_tolerance = [1, 1, 1, 1]
+        self.analyser_move_tolerance = [0, 0, 0, 0]
         self.detector_move_tolerance = [0, 0, 0]
         self.bragg_angle_rbv, self.bragg_angle_setter = soft_signal_r_and_setter(
             float, 90.0, units="deg"
@@ -260,22 +260,23 @@ class XesSpectrometerEnergy(StandardReadable, Movable[float]):
         self,
         spectrometer_bragg: XesSpectrometerBragg,
         crystal_cut: list[int],
+        lattice_parameter: float = lattice_parameter_si,
         name: str = "",
     ):
         self.spectrometer_bragg = spectrometer_bragg.set
         self.energy_converter = EnergyConvertor()
         self.energy_converter.miller_indices = crystal_cut
+        self.lattice_parameter = lattice_parameter
 
         with self.add_children_as_readables(Format.HINTED_UNCACHED_SIGNAL):
             self.crystal_cut, self.crystal_cut_setter = soft_signal_r_and_setter(
-                Array1D[np.int8], name="crystal cut"
+                Array1D[np.int8], name="crystal_cut"
             )
-
             self.xes_energy, self.xes_energy_setter = soft_signal_r_and_setter(
                 float, name="xes_energy", units="eV"
             )
             self.xes_bragg, self.xes_bragg_setter = soft_signal_r_and_setter(
-                float, name="xes_bragg", units="eV"
+                float, name="xes_bragg", units="degrees"
             )
 
         self.set_crystal_cut(crystal_cut)
@@ -289,6 +290,7 @@ class XesSpectrometerEnergy(StandardReadable, Movable[float]):
     async def set(self, energy_ev: float):
         crystal_cut = await self.crystal_cut.get_value()
         self.energy_converter.miller_indices = crystal_cut.tolist()
+        self.energy_converter.lattice_parameter = self.lattice_parameter
         bragg_angle = self.energy_converter.convert_to_bragg(energy_ev)
 
         if math.isnan(bragg_angle) or math.isinf(bragg_angle):
