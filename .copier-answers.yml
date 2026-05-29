@@ -14,7 +14,7 @@ docs_type: README
 git_platform: github.com
 github_org: DiamondLightSource
 package_name: spectroscopy_bluesky
-pypi: true
+pypi: false
 repo_name: spectroscopy-bluesky
 strict_typing: false
 type_checker: pyright
