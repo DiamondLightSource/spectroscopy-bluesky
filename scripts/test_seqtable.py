@@ -68,6 +68,28 @@ def two_seq_tables_plan() -> MsgGenerator:
     # from the 1st sequence table.
     # yield from setup_seq_table_spectrum_triggers(panda_triggers, p, 2)
 
+    readable_pvs = {
+        "motor_readback": {
+            "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.RBV  ",
+            "datatype": "float",
+        },
+        "motor_offset": {
+            "pv_name": "BL51P-MO-STEP-06:M4.RBV",
+            "datatype": "float",
+        },
+        "feedrate": {
+            "pv_name": "BL51P-MO-STEP-06:FEEDRATE_RBV",
+            "datatype": "float",
+        },
+        "pmactype": {
+            "pv_name": "BL51P-MO-STEP-06:PMACTYPE",
+            "datatype": "str",
+        },
+        "motor_encoder": {
+            "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.UEIP",
+            "datatype": "str",
+        },
+    }
     yield from seq_table_uniform_scan(
         0,
         5,
@@ -77,6 +99,8 @@ def two_seq_tables_plan() -> MsgGenerator:
         number_of_sweeps=6,
         add_sweep_triggers=True,
         spectrum_triggers=generate_test_triggers(),
+        readable_pvs=readable_pvs,
+        metadata={"user_comment": "this is a test"},
         motor=ts,
         panda=p,
     )
