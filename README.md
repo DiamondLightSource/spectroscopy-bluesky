@@ -1,6 +1,6 @@
 [![CI](https://github.com/DiamondLightSource/spectroscopy-bluesky/actions/workflows/ci.yml/badge.svg)](https://github.com/DiamondLightSource/spectroscopy-bluesky/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/DiamondLightSource/spectroscopy-bluesky/branch/main/graph/badge.svg)](https://codecov.io/gh/DiamondLightSource/spectroscopy-bluesky)
-[![PyPI](https://img.shields.io/pypi/v/spectroscopy-bluesky.svg)](https://pypi.org/project/spectroscopy-bluesky)
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 # spectroscopy_bluesky
@@ -13,7 +13,6 @@ how it does it, and why people should use it.
 What            | Where
 :---:           | :---:
 Source          | <https://github.com/DiamondLightSource/spectroscopy-bluesky>
-PyPI            | `pip install spectroscopy-bluesky`
 Docker          | `docker run ghcr.io/diamondlightsource/spectroscopy-bluesky:latest`
 Releases        | <https://github.com/DiamondLightSource/spectroscopy-bluesky/releases>
 
