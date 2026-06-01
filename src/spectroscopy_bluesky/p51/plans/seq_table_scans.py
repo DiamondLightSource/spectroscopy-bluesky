@@ -471,8 +471,7 @@ def seq_table_scan(
     for detector in detectors:
         yield from ensure_connected(detector)
 
-    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
-    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
+    pmac_trajectory_flyer = PmacTrajectoryTriggerLogic(pmac)
 
     scan_parameters = kwargs.get("scan_params_dict") or {}
     scan_name = scan_parameters.get("scan_name")

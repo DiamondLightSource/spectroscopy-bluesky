@@ -1,0 +1,21 @@
+# Before changing this BlueAPI version number, you should check that 
+# the BlueAPI pin in pyproject.toml is compatible, else the version will
+# be overridden
+FROM ghcr.io/diamondlightsource/blueapi:latest
+USER root
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN uv pip install --no-cache-dir --no-compile \
+    xraydb \
+    scipy
+
+
+# Create and set permissions for uv venv, root cache
+# and user cache. Allows Blueapi's setup-scratch
+# to change dependencies without permission errors
+RUN mkdir -p /app/.venv /root/.cache/uv /home/app/.cache/uv \
+    && chmod -R 777 /app/.venv /root/.cache/uv /home/app/.cache/uv
+
+
+USER ubuntu
