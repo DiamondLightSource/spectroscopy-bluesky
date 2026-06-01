@@ -1,6 +1,6 @@
 import math as mt  # noqa: I001
 from typing import Any
-
+import logging
 from collections.abc import Sequence
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
@@ -89,6 +89,26 @@ def generate_triggers(
     return spectrum_triggers
 
 
+LOGGER = logging.getLogger(__name__)
+
+# List of local parameters to exclude from logging
+exclude_from_logging = {
+    "panda_dict",
+    "seq_table",
+    "prepare_triggers_seqtable",
+    "params",
+    "gen",
+    "energies",
+    "grid",
+    "seqTable_builder",
+    "scan_parameters",
+    "prepare_position_seqtable",
+    "angle",
+    "capture_positions",
+    "kwargs",
+}
+
+
 def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
     """
     Prepare and monitor EPICS process variables (PVs) from a configuration dictionary.
@@ -136,7 +156,7 @@ def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
         "Table": Table,
     }
     for pv_key, pv_config in readable_pvs.items():
-        datatype_str = pv_config["datatype"].strip()
+        datatype_str = pv_config["pv_datatype"].strip()
         if datatype_str not in datatype_map:
             raise ValueError(f"Unsupported datatype: {datatype_str}")
         datatype = datatype_map[datatype_str]
@@ -227,6 +247,11 @@ def seq_table_non_linear(
 
     angle = energy_to_bragg_angle(si_111_lattice_spacing, energies)
 
+    scan_params_dict = {
+        k: v for k, v in locals().items() if k not in exclude_from_logging
+    }
+    scan_params_dict["scan_name"] = "seq_table_non_linear"
+
     yield from seq_table_position_scan(
         angle[0],
         angle[-1],
@@ -236,8 +261,7 @@ def seq_table_non_linear(
         panda,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
-        readable_pvs=readable_pvs,
-        metadata=metadata,
+        scan_params_dict=scan_params_dict,
     )
 
 
@@ -269,13 +293,10 @@ def seq_table_energy_scan(
     if variable_exafs_time:
         capture_time = grid[:, 1] * prescale_as_us
 
-    md = {
-        "energy scan parameters": {
-            "element": element,
-            "edge": edge,
-        },
-        **(metadata or {}),
+    scan_params_dict = {
+        k: v for k, v in locals().items() if k not in exclude_from_logging
     }
+    scan_params_dict["scan_name"] = "seq_table_energy_scan"
 
     yield from seq_table_position_scan(
         angle[0],
@@ -284,12 +305,9 @@ def seq_table_energy_scan(
         angle,
         motor,
         panda,
-        capture_time=capture_time,
-        prescale_as_us=prescale_as_us,
         num_trajectory_points=len(angle),
         number_of_sweeps=number_of_sweeps,
-        readable_pvs=readable_pvs,
-        metadata=md,
+        scan_params_dict=scan_params_dict,
     )
 
 
@@ -312,6 +330,7 @@ def seq_table_two_panda_scan(
 ) -> MsgGenerator:
     # setup a second seq table for 'spectrum based' triggering
     panda_dict = {}
+    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
     if triggers is not None:
         spectrum_triggers = generate_triggers(triggers)
         seq_table = (
@@ -328,19 +347,23 @@ def seq_table_two_panda_scan(
         )
         panda_dict[panda2] = [prepare_triggers_seqtable]
 
-    yield from seq_table_uniform_scan(
+    scan_params_dict = {
+        k: v for k, v in locals().items() if k not in exclude_from_logging
+    }
+    scan_params_dict["scan_name"] = "seq_table_two_panda_scan"
+
+    yield from seq_table_position_scan(
         start,
         stop,
-        stepsize,
         time_per_sweep,
+        capture_positions,
         motor=motor,
         panda=panda,
         num_trajectory_points=num_trajectory_points,
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
-        readable_pvs=readable_pvs,
-        metadata=metadata,
+        scan_params_dict=scan_params_dict,
     )
 
 
@@ -508,6 +531,11 @@ def seq_table_uniform_scan(
         )
         panda_dict[panda] = [prepare_triggers_seqtable]
 
+    scan_params_dict = {
+        k: v for k, v in locals().items() if k not in exclude_from_logging
+    }
+    scan_params_dict["scan_name"] = "seq_table_uniform_scan"
+
     yield from seq_table_position_scan(
         start,
         stop,
@@ -519,10 +547,7 @@ def seq_table_uniform_scan(
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
-        ramp_time=ramp_time,
-        turnaround_time=turnaround_time,
-        readable_pvs=readable_pvs,
-        metadata=metadata,
+        scan_params_dict=scan_params_dict,
     )
 
 
@@ -540,10 +565,7 @@ def seq_table_position_scan(
     capture_time: list[float] | None = None,
     prescale_as_us: float = 1,
     scan_spec: Fly | None = None,
-    ramp_time: float | None = None,
-    turnaround_time: float | None = None,
-    readable_pvs: dict[str, Any] | None = None,
-    metadata: dict[str, Any] | None = None,
+    **kwargs: Any,
 ) -> MsgGenerator:
     if scan_spec is None:
         time_per_traj_point = time_per_sweep / num_trajectory_points
@@ -605,15 +627,25 @@ def seq_table_position_scan(
     # if not already present).
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
-    yield from seq_table_scan(
-        scan_spec,
-        panda_dict,
-        motor,
-        ramp_time,
-        turnaround_time,
-        metadata=metadata,
-        readable_pvs=readable_pvs,
-    )
+    scan_parameters = kwargs.get("scan_params_dict")
+
+    if scan_parameters is not None:
+        scan_parameters.update(
+            {
+                k: v
+                for k, v in locals().items()
+                if k not in scan_parameters and k not in exclude_from_logging
+            }
+        )
+    else:
+        kwargs["scan_params_dict"] = {
+            k: v for k, v in locals().items() if k not in exclude_from_logging
+        }
+        kwargs["scan_params_dict"]["scan_name"] = (
+            kwargs.get("scan_name") or "seq_table_position_scan"
+        )
+
+    yield from seq_table_scan(scan_spec, panda_dict, motor=motor, **kwargs)
 
 
 def seq_table_scan(
@@ -622,10 +654,7 @@ def seq_table_scan(
         HDFPanda, list[Callable[[], MsgGenerator]]
     ],  # dict containing functions to prepare each panda
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
-    ramp_time: float | None = None,
-    turnaround_time: float | None = None,
-    readable_pvs: dict[str, Any] | None = None,
-    metadata: dict[str, Any] | None = None,
+    **kwargs: Any,
 ) -> MsgGenerator:
     pmac = turbo_slit_pmac(motor)
 
@@ -639,19 +668,28 @@ def seq_table_scan(
     pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
     pamc_trigger_logic = PmacScanInfo(
-        spec=scan_spec, ramp_time=ramp_time, turnaround_time=turnaround_time
+        spec=scan_spec,
+        ramp_time=kwargs.get("ramp_time"),
+        turnaround_time=kwargs.get("turnaround_time"),
     )
+
+    scan_parameters = kwargs.get("scan_params_dict") or {}
+    scan_name = scan_parameters.get("scan_name")
 
     _md = {
         "plan_args": {
             "detectors": {det.name for det in detectors},
             "spec": repr(scan_spec),
-            "rampup time": repr(ramp_time),
-            "turnaround_time": repr(turnaround_time),
+            "motor": repr(motor),
+            **{
+                k: repr(v) if not isinstance(v, np.ndarray) else v
+                for k, v in scan_parameters.items()
+            },
         },
-        **(metadata or {}),
-        **(readable_pvs or {}),
     }
+
+    # Log scan name and parameters
+    LOGGER.info(f"Running {scan_name} plan with scan parameters {scan_parameters}")
 
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator(md=_md)
@@ -670,6 +708,9 @@ def seq_table_scan(
 
         # Prepare pmac with the trajectory
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
+
+        if scan_parameters.get("readable_pvs") is not None:
+            yield from prepare_pvs(scan_parameters["readable_pvs"])
 
         yield from bps.collect_while_completing(
             flyers=[pmac_trajectory_flyer],
