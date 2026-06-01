@@ -57,6 +57,23 @@ from .common import (
 
 LOGGER = logging.getLogger(__name__)
 
+# List of local parameters to exclude from logging
+exclude_from_logging = {
+    "panda_dict",
+    "seq_table",
+    "prepare_triggers_seqtable",
+    "params",
+    "gen",
+    "energies",
+    "grid",
+    "seqTable_builder",
+    "scan_parameters",
+    "prepare_position_seqtable",
+    "angle",
+    "capture_positions",
+    "kwargs",
+}
+
 
 def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
     """
@@ -196,7 +213,9 @@ def seq_table_non_linear(
 
     angle = energy_to_bragg_angle(si_111_lattice_spacing, energies)
 
-    scan_params_dict = locals().copy()
+    scan_params_dict = {
+        k: v for k, v in locals().items() if k not in exclude_from_logging
+    }
     scan_params_dict["scan_name"] = "seq_table_non_linear"
 
     yield from seq_table_position_scan(
@@ -232,7 +251,7 @@ def seq_table_energy_scan(
     angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
 
     scan_params_dict = {
-        k: v for k, v in locals().items() if k not in {"params", "gen", "capture_time"}
+        k: v for k, v in locals().items() if k not in exclude_from_logging
     }
     scan_params_dict["scan_name"] = "seq_table_energy_scan"
 
@@ -282,7 +301,9 @@ def seq_table_two_panda_scan(
         )
         panda_dict[panda2] = [prepare_triggers_seqtable]
 
-    scan_params_dict = {k: v for k, v in locals().items() if k not in {"panda_dict"}}
+    scan_params_dict = {
+        k: v for k, v in locals().items() if k not in exclude_from_logging
+    }
     scan_params_dict["scan_name"] = "seq_table_two_panda_scan"
 
     yield from seq_table_position_scan(
@@ -312,6 +333,8 @@ def seq_table_uniform_scan(
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
 
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
@@ -331,7 +354,9 @@ def seq_table_uniform_scan(
         )
         panda_dict[panda] = [prepare_triggers_seqtable]
 
-    scan_params_dict = {k: v for k, v in locals().items() if k not in {"panda_dict"}}
+    scan_params_dict = {
+        k: v for k, v in locals().items() if k not in exclude_from_logging
+    }
     scan_params_dict["scan_name"] = "seq_table_uniform_scan"
 
     yield from seq_table_position_scan(
@@ -415,26 +440,12 @@ def seq_table_position_scan(
             {
                 k: v
                 for k, v in locals().items()
-                if k not in scan_parameters
-                and not {
-                    "seqTable_builder",
-                    "scan_parameters",
-                    "prepare_position_seqtable",
-                    "panda_dict",
-                }
+                if k not in scan_parameters and k not in exclude_from_logging
             }
         )
     else:
         kwargs["scan_params_dict"] = {
-            k: v
-            for k, v in locals().items()
-            if k
-            not in {
-                "seqTable_builder",
-                "scan_parameters",
-                "prepare_position_seqtable",
-                "panda_dict",
-            }
+            k: v for k, v in locals().items() if k not in exclude_from_logging
         }
         kwargs["scan_params_dict"]["scan_name"] = (
             kwargs.get("scan_name") or "seq_table_position_scan"
@@ -478,6 +489,7 @@ def seq_table_scan(
         },
     }
 
+    # Log scan name and parameters
     LOGGER.info(f"Running {scan_name} plan with scan parameters {scan_parameters}")
 
     @bpp.stage_decorator([*detectors])
