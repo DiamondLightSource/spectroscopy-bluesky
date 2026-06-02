@@ -141,11 +141,11 @@ async def check_if_devices_move(
     # move into position
     await spectrometer_bragg.set(bragg_angle)
 
-    analyser_mocks : list[AsyncMock] = []
+    analyser_mocks: list[AsyncMock] = []
 
     # mock the 'set' mothods on analyser and detector devices
     for c in spectrometer_bragg.analyser_crystals:
-        c.set  = AsyncMock()
+        c.set = AsyncMock()
         analyser_mocks.append(c.set)
 
     spectrometer_bragg.detector_device.set = AsyncMock()
