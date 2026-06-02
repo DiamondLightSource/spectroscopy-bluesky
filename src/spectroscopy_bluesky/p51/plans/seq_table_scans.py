@@ -91,22 +91,9 @@ def generate_triggers(
 
 LOGGER = logging.getLogger(__name__)
 
-# List of local parameters to exclude from logging
-exclude_from_logging = {
-    "panda_dict",
-    "seq_table",
-    "prepare_triggers_seqtable",
-    "params",
-    "gen",
-    "energies",
-    "grid",
-    "seqTable_builder",
-    "scan_parameters",
-    "prepare_position_seqtable",
-    "angle",
-    "capture_positions",
-    "kwargs",
-}
+
+def log_scan_parameters(**kwargs) -> dict:
+    return kwargs
 
 
 def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
@@ -247,11 +234,14 @@ def seq_table_non_linear(
 
     angle = energy_to_bragg_angle(si_111_lattice_spacing, energies)
 
-    scan_params_dict = {
-        k: v for k, v in locals().items() if k not in exclude_from_logging
-    }
-    scan_params_dict["scan_name"] = "seq_table_non_linear"
-
+    scan_params_dict = log_scan_parameters(
+        scan_name="seq_table_non_linear",
+        ei=ei,
+        ef=ef,
+        de=de,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
+    )
     yield from seq_table_position_scan(
         angle[0],
         angle[-1],
@@ -293,11 +283,13 @@ def seq_table_energy_scan(
     if variable_exafs_time:
         capture_time = grid[:, 1] * prescale_as_us
 
-    scan_params_dict = {
-        k: v for k, v in locals().items() if k not in exclude_from_logging
-    }
-    scan_params_dict["scan_name"] = "seq_table_energy_scan"
-
+    scan_params_dict = log_scan_parameters(
+        scan_name="seq_table_energy_scan",
+        element=element,
+        edge=edge,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
+    )
     yield from seq_table_position_scan(
         angle[0],
         angle[-1],
@@ -306,6 +298,7 @@ def seq_table_energy_scan(
         motor,
         panda,
         num_trajectory_points=len(angle),
+        capture_time=capture_time,
         number_of_sweeps=number_of_sweeps,
         scan_params_dict=scan_params_dict,
     )
@@ -347,10 +340,12 @@ def seq_table_two_panda_scan(
         )
         panda_dict[panda2] = [prepare_triggers_seqtable]
 
-    scan_params_dict = {
-        k: v for k, v in locals().items() if k not in exclude_from_logging
-    }
-    scan_params_dict["scan_name"] = "seq_table_two_panda_scan"
+    scan_params_dict = log_scan_parameters(
+        scan_name="seq_table_two_panda_scan",
+        spectrum_triggers=triggers,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
+    )
 
     yield from seq_table_position_scan(
         start,
@@ -519,10 +514,10 @@ def seq_table_uniform_scan(
     if panda_dict is None:
         panda_dict = {}
     if spectrum_triggers is not None:
-        spectrum_triggers = generate_triggers(spectrum_triggers)
+        spectrumtriggers = generate_triggers(spectrum_triggers)
         seq_table = (
             SeqTableBuilder()
-            .add_spectrum_based_triggers(spectrum_triggers)
+            .add_spectrum_based_triggers(spectrumtriggers)
             .get_seq_table()
         )
 
@@ -531,10 +526,13 @@ def seq_table_uniform_scan(
         )
         panda_dict[panda] = [prepare_triggers_seqtable]
 
-    scan_params_dict = {
-        k: v for k, v in locals().items() if k not in exclude_from_logging
-    }
-    scan_params_dict["scan_name"] = "seq_table_uniform_scan"
+    scan_params_dict = log_scan_parameters(
+        scan_name="seq_table_uniform_scan",
+        stepsize=stepsize,
+        spectrum_triggers=spectrum_triggers,
+        readable_pvs=readable_pvs,
+        metadata=metadata,
+    )
 
     yield from seq_table_position_scan(
         start,
@@ -627,23 +625,24 @@ def seq_table_position_scan(
     # if not already present).
     panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
 
-    scan_parameters = kwargs.get("scan_params_dict")
+    if kwargs.get("scan_params_dict") is None:
+        kwargs["scan_params_dict"] = {}
+        kwargs["scan_params_dict"]["scan_name"] = "seq_table_position_scan"
 
-    if scan_parameters is not None:
-        scan_parameters.update(
-            {
-                k: v
-                for k, v in locals().items()
-                if k not in scan_parameters and k not in exclude_from_logging
-            }
+    kwargs["scan_params_dict"].update(
+        log_scan_parameters(
+            start=start,
+            stop=stop,
+            time_per_sweep=time_per_sweep,
+            capture_positions=capture_positions,
+            motor=motor,
+            panda=panda,
+            num_trajectory_points=num_trajectory_points,
+            add_sweep_triggers=add_sweep_triggers,
+            number_of_sweeps=number_of_sweeps,
+            num_seqtable_repeats=num_seqtable_repeats,
         )
-    else:
-        kwargs["scan_params_dict"] = {
-            k: v for k, v in locals().items() if k not in exclude_from_logging
-        }
-        kwargs["scan_params_dict"]["scan_name"] = (
-            kwargs.get("scan_name") or "seq_table_position_scan"
-        )
+    )
 
     yield from seq_table_scan(scan_spec, panda_dict, motor=motor, **kwargs)
 
