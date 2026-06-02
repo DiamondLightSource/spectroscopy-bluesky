@@ -291,7 +291,12 @@ class XesSpectrometerEnergy(StandardReadable, Movable[float]):
         crystal_cut = await self.crystal_cut.get_value()
         self.energy_converter.miller_indices = crystal_cut.tolist()
         self.energy_converter.lattice_parameter = self.lattice_parameter
-        bragg_angle = self.energy_converter.convert_to_bragg(energy_ev)
+        try:
+            bragg_angle = self.energy_converter.convert_to_bragg(energy_ev)
+        except Exception as err:
+            raise ValueError(
+                f"Problem converting energy {energy_ev}eV to Bragg angle"
+            ) from err
 
         if math.isnan(bragg_angle) or math.isinf(bragg_angle):
             raise ValueError(f"Could not convert energy {energy_ev}eV to Bragg angle")
