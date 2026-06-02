@@ -70,24 +70,24 @@ def two_seq_tables_plan() -> MsgGenerator:
 
     readable_pvs = {
         "motor_readback": {
-            "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.RBV  ",
-            "datatype": "float",
+            "read_pv": "BL51P-OP-PCHRO-01:TS:XFINE.RBV  ",
+            "pv_datatype": "float",
         },
         "motor_offset": {
-            "pv_name": "BL51P-MO-STEP-06:M4.RBV",
-            "datatype": "float",
+            "read_pv": "BL51P-MO-STEP-06:M4.RBV",
+            "pv_datatype": "float",
         },
         "feedrate": {
-            "pv_name": "BL51P-MO-STEP-06:FEEDRATE_RBV",
-            "datatype": "float",
+            "read_pv": "BL51P-MO-STEP-06:FEEDRATE_RBV",
+            "pv_datatype": "float",
         },
         "pmactype": {
-            "pv_name": "BL51P-MO-STEP-06:PMACTYPE",
-            "datatype": "str",
+            "read_pv": "BL51P-MO-STEP-06:PMACTYPE",
+            "pv_datatype": "str",
         },
         "motor_encoder": {
-            "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.UEIP",
-            "datatype": "str",
+            "read_pv": "BL51P-OP-PCHRO-01:TS:XFINE.UEIP",
+            "pv_datatype": "str",
         },
     }
     yield from seq_table_uniform_scan(

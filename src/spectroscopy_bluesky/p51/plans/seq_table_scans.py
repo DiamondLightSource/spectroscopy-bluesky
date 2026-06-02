@@ -58,11 +58,7 @@ from .common import (
 LOGGER = logging.getLogger(__name__)
 
 
-def log_scan_parameters(**kwargs) -> dict:
-    return kwargs
-
-
-def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
+def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
     """
     Prepare and monitor EPICS process variables (PVs) from a configuration dictionary.
 
@@ -73,9 +69,9 @@ def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
     Args:
         readable_pvs : dict[str, Any]
             Dictionary defining PV configurations. Each value has the following keys:
-                - "pv_name" (str): The EPICS PV identifier.
-                - "datatype" (str): The data type name (e.g., "float"), which is mapped
-                internally to a Python type.
+                - "read_pv" (str): The EPICS PV identifier.
+                - "pv_datatype" (str): The data type name (e.g., "float"), which is
+                    mapped internally to a Python type.
 
     Returns:
         MsgGenerator
@@ -108,24 +104,24 @@ def prepare_pvs(readable_pvs: dict[str, Any]) -> MsgGenerator:
         "Sequence[SupersetEnum]": Sequence[SupersetEnum],
         "Table": Table,
     }
-    for pv_key, pv_config in readable_pvs.items():
-        datatype_str = pv_config["datatype"].strip()
+    for pv_name, pv_config in readable_pvs.items():
+        datatype_str = pv_config["pv_datatype"].strip()
         if datatype_str not in datatype_map:
             raise ValueError(f"Unsupported datatype: {datatype_str}")
         datatype = datatype_map[datatype_str]
 
         pv_signal = epics_signal_r(
             datatype,
-            pv_config["pv_name"].strip(),
-            name=pv_key,
+            pv_config["read_pv"].strip(),
+            name=pv_name,
         )
 
         try:
             yield from ensure_connected(pv_signal)
         except Exception as e:
-            raise RuntimeError(f"Failed to connect PV '{pv_key}'") from e
+            raise RuntimeError(f"Failed to connect PV '{pv_name}'") from e
 
-        yield from bps.monitor(pv_signal, name=pv_key)
+        yield from bps.monitor(pv_signal, name=pv_name)
 
 
 def prepare_seq_table(
@@ -200,14 +196,14 @@ def seq_table_non_linear(
 
     angle = energy_to_bragg_angle(si_111_lattice_spacing, energies)
 
-    scan_params_dict = log_scan_parameters(
-        scan_name="seq_table_non_linear",
-        ei=ei,
-        ef=ef,
-        de=de,
-        readable_pvs=readable_pvs,
-        metadata=metadata,
-    )
+    scan_params_dict = {
+        "scan_name": "seq_table_non_linear",
+        "ei": ei,
+        "ef": ef,
+        "de": de,
+        "readable_pvs": readable_pvs,
+        "metadata": metadata,
+    }
 
     yield from seq_table_position_scan(
         angle[0],
@@ -241,13 +237,13 @@ def seq_table_energy_scan(
     grid = gen.calculate_energy_time_grid()
     angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
 
-    scan_params_dict = log_scan_parameters(
-        scan_name="seq_table_energy_scan",
-        element=element,
-        edge=edge,
-        readable_pvs=readable_pvs,
-        metadata=metadata,
-    )
+    scan_params_dict = {
+        "scan_name": "seq_table_energy_scan",
+        "element": element,
+        "edge": edge,
+        "readable_pvs": readable_pvs,
+        "metadata": metadata,
+    }
 
     yield from seq_table_position_scan(
         angle[0],
@@ -295,14 +291,12 @@ def seq_table_two_panda_scan(
         )
         panda_dict[panda2] = [prepare_triggers_seqtable]
 
-    scan_params_dict = log_scan_parameters(
-        scan_name="seq_table_two_panda_scan",
-        spectrum_triggers=spectrum_triggers,
-        readable_pvs=readable_pvs,
-        metadata=metadata,
-    )
-
-    scan_params_dict["scan_name"] = "seq_table_two_panda_scan"
+    scan_params_dict = {
+        "scan_name": "seq_table_two_panda_scan",
+        "spectrum_triggers": spectrum_triggers,
+        "readable_pvs": readable_pvs,
+        "metadata": metadata,
+    }
 
     yield from seq_table_position_scan(
         start,
@@ -352,13 +346,13 @@ def seq_table_uniform_scan(
         )
         panda_dict[panda] = [prepare_triggers_seqtable]
 
-    scan_params_dict = log_scan_parameters(
-        scan_name="seq_table_uniform_scan",
-        stepsize=stepsize,
-        spectrum_triggers=spectrum_triggers,
-        readable_pvs=readable_pvs,
-        metadata=metadata,
-    )
+    scan_params_dict = {
+        "scan_name": "seq_table_uniform_scan",
+        "stepsize": stepsize,
+        "spectrum_triggers": spectrum_triggers,
+        "readable_pvs": readable_pvs,
+        "metadata": metadata,
+    }
 
     yield from seq_table_position_scan(
         start,
@@ -439,19 +433,19 @@ def seq_table_position_scan(
         kwargs["scan_params_dict"]["scan_name"] = "seq_table_position_scan"
 
     kwargs["scan_params_dict"].update(
-        log_scan_parameters(
-            start=start,
-            stop=stop,
-            time_per_sweep=time_per_sweep,
-            capture_positions=capture_positions,
-            motor=motor,
-            panda=panda,
-            num_trajectory_points=num_trajectory_points,
-            add_sweep_triggers=add_sweep_triggers,
-            number_of_sweeps=number_of_sweeps,
-            time_per_traj_point=time_per_traj_point,
-            num_seqtable_repeats=num_seqtable_repeats,
-        )
+        {
+            "start": start,
+            "stop": stop,
+            "time_per_sweep": time_per_sweep,
+            "capture_positions": capture_positions,
+            "motor": motor,
+            "panda": panda,
+            "num_trajectory_points": num_trajectory_points,
+            "add_sweep_triggers": add_sweep_triggers,
+            "number_of_sweeps": number_of_sweeps,
+            "time_per_traj_point": time_per_traj_point,
+            "num_seqtable_repeats": num_seqtable_repeats,
+        }
     )
     yield from seq_table_scan(spec, panda_dict, motor=motor, **kwargs)
 
@@ -512,7 +506,7 @@ def seq_table_scan(
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
 
         if scan_parameters.get("readable_pvs") is not None:
-            yield from prepare_pvs(scan_parameters["readable_pvs"])
+            yield from prepare_pv_monitoring(scan_parameters["readable_pvs"])
 
         yield from bps.collect_while_completing(
             flyers=[pmac_trajectory_flyer],
