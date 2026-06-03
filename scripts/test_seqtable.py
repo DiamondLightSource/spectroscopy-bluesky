@@ -91,7 +91,7 @@ def two_seq_tables_plan() -> MsgGenerator:
         metadata={"user_comments": "this is test"},
         readable_pvs={
             "motor_readback": {
-                "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.RBV",
+                "read_pv": "BL51P-OP-PCHRO-01:TS:XFINE.RBV",
                 "pv_datatype": "float",
             }
         },
