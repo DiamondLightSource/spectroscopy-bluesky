@@ -1,0 +1,21 @@
+# Build with : podman build -t <image-name> -f Dockerfile.processing
+# Run with :   podman run -p 8000:8000 <image-name>
+
+# FROM ubuntu:resolute 
+FROM python:3.11-slim
+
+# Set 'working directory' - subsequent COPY commands run in there
+WORKDIR /app
+
+COPY src/spectroscopy_bluesky/common/processing_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# make copy of code from git repo (spectroscopy_bluesky) 
+# COPY . .
+# COPY src/spectroscopy_bluesky/common/processing_service ./src/spectroscopy_bluesky/common/processing_service
+COPY src/spectroscopy_bluesky/ ./src/spectroscopy_bluesky/
+
+# Set python path so it can locate modules in the source code tree
+ENV PYTHONPATH=/app/src
+
+CMD ["uvicorn", "spectroscopy_bluesky.common.processing_service.api:app", "--host", "0.0.0.0", "--port", "8000"]
