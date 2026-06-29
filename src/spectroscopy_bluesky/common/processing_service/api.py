@@ -68,7 +68,7 @@ def to_processing_config(processing_step: ProcessorOutput) -> ProcessorFunctionO
         raise HTTPException(
             status_code=404,
             detail=f"Processing function name '{processing_step.function_name}'"
-            " is not recognised"
+            " is not recognised",
         )
 
     p = ProcessorFunctionOutput(
@@ -86,10 +86,7 @@ def check_file_exists(msg_prefix: str, file_path: str):
         )
 
 
-
-
 app = FastAPI()
-
 
 
 @app.get("/health")

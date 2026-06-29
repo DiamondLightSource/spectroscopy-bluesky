@@ -6,6 +6,7 @@ class ProcessorOutput(BaseModel):
     function_name: str
     data_names: list[str]
 
+
 class ProcessorSetup(BaseModel):
     input_file: str
     output_file: str

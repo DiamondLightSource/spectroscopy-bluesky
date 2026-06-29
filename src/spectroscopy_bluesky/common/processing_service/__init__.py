@@ -18,5 +18,5 @@ __all__ = [
     "ProcessorSetup",
     "ProcessorOutput",
     "ProcessorState",
-    "ProcessingClient"
+    "ProcessingClient",
 ]

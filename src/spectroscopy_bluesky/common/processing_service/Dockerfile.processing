@@ -19,4 +19,3 @@ COPY src/spectroscopy_bluesky/ ./src/spectroscopy_bluesky/
 ENV PYTHONPATH=/app/src
 
 CMD ["uvicorn", "spectroscopy_bluesky.common.processing_service.api:app", "--host", "0.0.0.0", "--port", "8000"]
-
