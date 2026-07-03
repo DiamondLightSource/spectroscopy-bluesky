@@ -2,12 +2,12 @@
 
 import typer
 from bluesky import RunEngine
-from dodal.beamlines.p51 import panda, turbo_slit
+from dodal.beamlines.p51 import panda1, path_provider, turbo_slit_x
 from ophyd_async.plan_stubs import ensure_connected
 
 from spectroscopy_bluesky.p51.plans.seq_table_scans import (
-    seq_non_linear,
-    seq_table,
+    seq_table_non_linear,
+    seq_table_uniform_scan,
 )
 from spectroscopy_bluesky.p51.plans.turbo_slit_fly_scans import (
     fly_sweep_both_ways,
@@ -25,6 +25,11 @@ _num = typer.Option(help="Number of points of the scan", default=100)
 
 _step = typer.Option(help="Step size in position/energy", default=1)
 
+_time_per_sweep = typer.Option(
+    help="Duration of each sweep of the scan",
+    default=5,
+)
+
 _duration = typer.Option(
     help="Duration of the acquisition starting on the rising edge of a trigger",
     default=0.01,
@@ -33,10 +38,10 @@ _duration = typer.Option(
 _sweeps = typer.Option(help="Number of sweeps", default=1)
 
 # Create the PMAC and Panda objects making sure they're connected
-t = turbo_slit()
-p = panda()
+p = panda1(path_provider())
+ts = turbo_slit_x()
 RE = RunEngine()
-RE(ensure_connected(t, p))
+RE(ensure_connected(ts, p))
 
 
 @app.command()
@@ -44,7 +49,7 @@ def case_2(
     start: int = _start,
     stop: int = _stop,
     step: float = _step,
-    duration: float = _duration,
+    time_per_sweep: float = _time_per_sweep,
 ):
     """
     Run an "energy" scan with constant speed on the motor and SeqTable.
@@ -53,13 +58,13 @@ def case_2(
     This scan requires the `seq_table` design to be loaded in the Panda.
     """
     RE(
-        seq_non_linear(
+        seq_table_non_linear(
             ei=start,
             ef=stop,
             de=step,
-            duration=duration,
+            time_per_sweep=time_per_sweep,
             panda=p,
-            restore=False,
+            motor=ts,
         )
     )
 
@@ -68,8 +73,8 @@ def case_2(
 def case_1(
     start: float = _start,
     stop: float = _stop,
-    num: int = _num,
-    duration: float = _duration,
+    stepsize: float = _step,
+    time_per_sweep: float = _time_per_sweep,
     sweeps: int = _sweeps,
 ):
     """
@@ -79,12 +84,13 @@ def case_1(
     This scan requires the `seq_table` design to be loaded in the Panda.
     """
     RE(
-        seq_table(
+        seq_table_uniform_scan(
             start=start,
             stop=stop,
-            num=num,
-            duration=duration,
+            stepsize=stepsize,
+            time_per_sweep=time_per_sweep,
             panda=p,
+            motor=ts,
             number_of_sweeps=sweeps,
         )
     )
@@ -111,6 +117,7 @@ def case_1_pcomp(
             num=num,
             duration=duration,
             panda=p,
+            motor=ts,
         )
     )
 
@@ -135,6 +142,7 @@ def fly_scan(
             num=num,
             duration=duration,
             panda=p,
+            motor=ts,
             number_of_sweeps=sweeps,
         )
     )

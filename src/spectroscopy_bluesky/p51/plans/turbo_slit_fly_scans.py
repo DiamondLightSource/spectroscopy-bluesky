@@ -318,8 +318,7 @@ def trajectory_fly_scan(
     spec = Fly(float(duration) @ (Line(motor, start, stop, num)))
 
     trigger_logic = spec
-    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
-    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)
+    pmac_trajectory_flyer = PmacTrajectoryTriggerLogic(pmac)
 
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
