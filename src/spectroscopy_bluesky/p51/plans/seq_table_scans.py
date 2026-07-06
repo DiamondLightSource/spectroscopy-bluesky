@@ -23,6 +23,7 @@ from ophyd_async.core import (
 from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
     PmacTrajectoryTriggerLogic,
+    PmacScanInfo,
 )
 from ophyd_async.fastcs.panda import (
     HDFPanda,
@@ -324,6 +325,8 @@ def seq_table_uniform_scan(
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
     readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
@@ -364,6 +367,8 @@ def seq_table_uniform_scan(
         num_trajectory_points=num_trajectory_points,
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
         panda_dict=panda_dict,
         scan_params_dict=scan_params_dict,
     )
@@ -467,7 +472,13 @@ def seq_table_scan(
     for detector in detectors:
         yield from ensure_connected(detector)
 
-    pmac_trajectory_flyer = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)  # pyright: ignore[reportArgumentType]
+    pamc_trigger_logic = PmacScanInfo(
+        spec=scan_spec,
+        ramp_time=kwargs.get("ramp_time") or None,
+        turnaround_time=kwargs.get("turnaround_time") or None,
+    )
 
     scan_parameters = kwargs.get("scan_params_dict") or {}
     scan_name = scan_parameters.get("scan_name")
@@ -490,7 +501,7 @@ def seq_table_scan(
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator(md=_md)
     def inner_plan():
-        yield from bps.prepare(pmac_trajectory_flyer, scan_spec, wait=True)
+        yield from bps.prepare(pmac_trajectory_flyer, pamc_trigger_logic, wait=True)
 
         # prepare and kickoff panda seq tables
         for preparer_funcs in panda_dict.values():
