@@ -476,8 +476,8 @@ def seq_table_scan(
     pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)  # pyright: ignore[reportArgumentType]
     pamc_trigger_logic = PmacScanInfo(
         spec=scan_spec,
-        ramp_time=kwargs.get("ramp_time") or 0,
-        turnaround_time=kwargs.get("turnaround_time") or 0,
+        ramp_time=kwargs.get("ramp_time") or None,
+        turnaround_time=kwargs.get("turnaround_time") or None,
     )
 
     scan_parameters = kwargs.get("scan_params_dict") or {}
