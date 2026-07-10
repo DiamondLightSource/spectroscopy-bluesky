@@ -443,7 +443,12 @@ def seq_table_position_scan(
     )
     # append position sequence table setup to panda entry (make empty list first
     # if not already present).
-    panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
+    panda_dict.setdefault(panda, [prepare_position_seqtable, prepare_panda_data(panda)])
+
+    if "panda_debug" in kwargs.keys():
+        panda_dict[kwargs["panda_debug"]] = [
+            prepare_panda_data(panda=kwargs["panda_debug"])
+        ]
 
     if kwargs.get("scan_params_dict") is None:
         kwargs["scan_params_dict"] = {}
