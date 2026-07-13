@@ -51,10 +51,7 @@ from spectroscopy_bluesky.common.xas_scans import (
     XasScanPointGenerator,
 )
 
-from .common import (
-    get_encoder_counts,
-    setup_trajectory_scan_pvs,
-)
+from .common import get_encoder_counts, setup_trajectory_scan_pvs, MRES
 
 LOGGER = logging.getLogger(__name__)
 
@@ -331,7 +328,6 @@ def seq_table_uniform_scan(
     readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
-
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
     # setup a second seq table for 'spectrum based' triggering :
@@ -374,6 +370,84 @@ def seq_table_uniform_scan(
     )
 
 
+def seq_table_gated_trigger(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    num_trajectory_points: int = 10,
+    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    add_sweep_triggers: bool = False,
+    number_of_sweeps: int = 4,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
+    panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+    **kwargs: Any,
+):
+    """Position based scan using the sequencer table and a gated trigger."""
+    num = abs(int(((stop + stepsize) - start) / stepsize))
+
+    time_per_traj_point = time_per_sweep / num
+
+    rep = 2 if number_of_sweeps > 1 else 1
+    trig_spec = Fly(float(time_per_traj_point) @ (rep * ~Line(motor, start, stop, num)))
+
+    capture_positions = np.zeros(len(trig_spec.frames().lower[motor]) + 2)
+    sweep = "pos" if stop > start else "neg"
+    lower = trig_spec.frames().lower[motor]
+    upper = trig_spec.frames().upper[motor]
+
+    if sweep == "pos":
+        first, second = lower, upper
+    else:
+        first, second = upper, lower
+
+    # Fill positions
+    capture_positions[: num + 1] = first[: num + 1]  # first block
+    capture_positions[num + 1 :] = second[-(num + 1) :]  # last block
+
+    capture_positions = np.array([int(x / MRES) for x in capture_positions])
+
+    pos_trigs = [True] * capture_positions.size
+    gate_trig = [True] * capture_positions.size
+    step = num + 1
+    pos_trigs[0::step] = [False] * (2)
+    gate_trig = pos_trigs[1:]
+    gate_trig.append(False)
+    scan_params_dict = {
+        "scan_name": "seq_table_uniform_scan",
+        "stepsize": stepsize,
+        "spectrum_triggers": spectrum_triggers,
+        "readable_pvs": readable_pvs,
+        "metadata": metadata,
+    }
+    gated_trigs = {
+        "pos": np.array(pos_trigs),
+        "gate": np.array(gate_trig),
+    }
+    yield from seq_table_position_scan(
+        start,
+        stop,
+        time_per_sweep,
+        capture_positions,
+        motor=motor,
+        panda=panda,
+        num_trajectory_points=num_trajectory_points,
+        add_sweep_triggers=add_sweep_triggers,
+        number_of_sweeps=number_of_sweeps,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
+        panda_dict=panda_dict,
+        scan_params_dict=scan_params_dict,
+        gated_trigs=gated_trigs,
+        kwargs=kwargs,
+    )
+
+
 def seq_table_position_scan(
     start: float,
     stop: float,
@@ -387,7 +461,6 @@ def seq_table_position_scan(
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
     **kwargs: Any,
 ) -> MsgGenerator:
-
     time_per_traj_point = time_per_sweep / num_trajectory_points
 
     print(
@@ -418,7 +491,20 @@ def seq_table_position_scan(
     # Use multiple repetitions of seq table to capture subsequent sweeps.
     seqTable_builder = SeqTableBuilder()
     seqTable_builder.convert_to_encoder = get_encoder_counts
-    seqTable_builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
+    if kwargs.get("gated_trigs") is not None:
+        seqTable_builder.add_positions(
+            positions,
+            time1=1,
+            outa1=Array1D(kwargs["gated_trigs"]["pos"], dtype=np.bool),
+            outb1=Array1D(kwargs["gated_trigs"]["gate"], dtype=np.bool),
+            time2=1,
+            outa2=False,
+            outb2=Array1D(kwargs["gated_trigs"]["gate"], dtype=np.bool),
+        )
+    else:
+        seqTable_builder.add_positions(
+            positions, time1=1, outa1=True, time2=1, outa2=False
+        )
     if add_sweep_triggers:
         seqTable_builder.add_start_end_triggers("outb1", "outc1")
 
