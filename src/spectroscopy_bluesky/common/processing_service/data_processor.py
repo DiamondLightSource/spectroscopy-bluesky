@@ -1,5 +1,7 @@
 import logging
+import traceback
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from time import sleep, time
@@ -81,7 +83,9 @@ class HdfDatasource(Datasource):
 
     def _check_connected(self):
         if not self.is_connected():
-            raise Exception("Cannot get number of frames - not connected to any file")
+            raise Exception(
+                "Cannot read from Hdf data source - not connected to any file"
+            )
 
     def close(self):
         if self.h5_file is not None:
@@ -93,7 +97,10 @@ class HdfDatasource(Datasource):
             self.h5_datasets = {}
 
     def get_num_frames(self) -> int:
-        self._check_connected()
+        self._setup_datasets()
+        if len(self.h5_datasets) == 0:
+            return -1
+
         lengths = []
         for dataset in self.h5_datasets.values():
             dataset.refresh()
@@ -107,16 +114,28 @@ class HdfDatasource(Datasource):
         self._check_connected()
         assert self.h5_file is not None
         for name in self.dataset_names:
+            # already have the dataset, nothing to do
+            if name in self.h5_datasets:
+                continue
+
+            # check it exists
             if name not in self.h5_file.keys():
                 raise ValueError(
                     f"Could not find dataset called {name} in hdf file {self.file_path}"
                 )
-            if name not in self.h5_datasets:
-                self.h5_datasets[name] = Dataset(self.h5_file[name])
+
+            # check it's a Dataset (and not a Group or Datatype)
+            dataset = self.h5_file[name]
+            if type(dataset) is not Dataset:
+                raise ValueError(
+                    f"Cannot read data called '{name}' from {self.file_path} "
+                    "- it is not a Dataset"
+                )
+
+            self.h5_datasets[name] = dataset
+        self.logger.info(f"Datasets for {self.file_path} : {self.dataset_names}")
 
     def read_data(self, start_frame: int, end_frame: int) -> dict[str, NDArray]:
-        self._check_connected()
-
         if len(self.dataset_names) == 0:
             raise ValueError(
                 "Cannot read data - names of datasets to be read "
@@ -124,12 +143,20 @@ class HdfDatasource(Datasource):
             )
 
         self._setup_datasets()
-
+        num_frames = end_frame - start_frame
         data = {}
         for name in self.dataset_names:
             dset = self.h5_datasets[name]
             dset.refresh()
-            data[name] = dset[start_frame : end_frame + 1]
+            dataset = dset[start_frame : end_frame + 1]
+
+            # make sure we have correct number of frames and truncate
+            # elements in outermost dimension if necessary
+            # (sometimes there are more - SWMR flush/readback race condition?)
+            if dataset.shape[0] != num_frames:
+                dataset = dataset[:num_frames]
+
+            data[name] = dataset
 
         return data
 
@@ -179,7 +206,7 @@ class HdfDataWriter:
         self.h5_file.swmr_mode = True
 
     def add_data(self, new_data: dict[str, NDArray]):
-        if self.h5_datasets is None:
+        if len(self.h5_datasets) == 0:
             self._open_file()
             self._setup_datasets(new_data)
 
@@ -228,22 +255,23 @@ class ProcessorState(Enum):
     NOT_STARTED = 0
     PREPARING = 1
     RUNNING = 2
-    FINISHED_FORCED = 3
-    FINISHED_DATA_TIMEOUT = 4
-    NOT_SET = 5
-    STOPPING = 6
+    FINISHED_STOPPED = 3
+    FINISHED_TIMEOUT = 4
+    FINISHED_ERROR = 5
+    NOT_SET = 6
+    STOPPING = 7
 
 
 class Processor:
     def __init__(
         self,
-        data_source: Datasource,
+        data_sources: list[Datasource],
         processing_config: list[ProcessorFunctionOutput],
         data_writer: HdfDataWriter,
         no_new_data_timeout: float = 5,
         process_loop_sleep_secs: float = 1.0,
     ):
-        self.data_source = data_source
+        self.all_data_sources = data_sources
         self.processing_config = processing_config
         self.data_writer = data_writer
         self.no_new_data_timeout = no_new_data_timeout
@@ -253,16 +281,31 @@ class Processor:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.end_data_loop: bool = False
         self.state = ProcessorState.NOT_STARTED
+        self.error_message: str | None = None
+        self.error_traceback: list[str] | None = None
 
     def start_processing(self):
         try:
             self.run_processing_loop()
         finally:
+            if self.state not in [
+                ProcessorState.FINISHED_STOPPED,
+                ProcessorState.FINISHED_TIMEOUT,
+            ]:
+                self.state = ProcessorState.FINISHED_ERROR
+                self.error_traceback = traceback.format_exc().splitlines()
+                self.error_message = self.error_traceback[-1]
+
             self.logger.info(
                 f"Tidying up at end of processing loop - loop state = {self.state}"
             )
+
             self.data_writer.close()
-            self.data_source.close()
+            for data_source in self.all_data_sources:
+                data_source.close()
+
+    def _active_data_sources(self):
+        return self.datasource_datanames.keys()
 
     def run_processing_loop(self):
 
@@ -270,27 +313,41 @@ class Processor:
 
         self.end_data_loop = False
 
-        # make set with names of all the data we need to read
-        self.all_data_names = set()
-        for config in self.processing_config:
-            self.all_data_names.update(config.data_names)
-        self.data_source.set_data_names(list(self.all_data_names))
+        # connect all sources to their hdf files
+        for source in self.all_data_sources:
+            source.connect()
 
-        self.data_source.connect()
-        self.check_data_available()
+        # map with data to be read from each source
+        self.datasource_datanames: dict[Datasource, set[str]] = defaultdict(set)
+
+        for config in self.processing_config:
+            for data_name in config.data_names:
+                # see which datasource has the data
+                source = [s for s in self.all_data_sources if s.has_dataset(data_name)]
+
+                # there must be exactly 1 source for the data
+                if len(source) != 1:
+                    raise ValueError(
+                        f"Expected 1 data source for dataset called {data_name} "
+                        f"but found {len(source)} ({source})"
+                    )
+                self.datasource_datanames[source[0]].add(data_name)
+
+        for source, data_names in self.datasource_datanames.items():
+            source.set_data_names(list(data_names))
 
         last_update_time = time()
         self.state = ProcessorState.RUNNING
         while True:
             if self.end_data_loop:
                 self.logger.info("Data process loop exited early")
-                self.state = ProcessorState.FINISHED_FORCED
+                self.state = ProcessorState.FINISHED_STOPPED
                 break
 
             new_processed_data = self.get_processed_data()
 
             if len(new_processed_data) > 0:
-                self.logger.info(f"Processed data : {new_processed_data}")
+                self.logger.debug(f"Processed data : {new_processed_data}")
                 self.data_writer.add_data(new_processed_data)
                 last_update_time = time()
 
@@ -299,7 +356,7 @@ class Processor:
                     f"No new data after {self.no_new_data_timeout} secs "
                     " - exiting readout loop"
                 )
-                self.state = ProcessorState.FINISHED_DATA_TIMEOUT
+                self.state = ProcessorState.FINISHED_TIMEOUT
                 break
 
             sleep(self.process_loop_sleep_secs)
@@ -308,37 +365,37 @@ class Processor:
         return self.state
 
     def get_processed_data(self) -> dict[str, NDArray]:
-        latest_data = self.read_new_frames()
+        all_data = self.read_new_frames()
 
-        if len(latest_data) == 0:
+        if len(all_data) == 0:
             return {}
 
-        print(f"Latest data read    : {latest_data}")
-        print(f"Processing data from : {self.processing_config}")
-        return self.process_data(latest_data)
+        return self.process_data(all_data)
 
-    def check_data_available(self):
-        missing_data_names = [
-            name
-            for name in self.all_data_names
-            if not self.data_source.has_dataset(name)
+    def get_num_frames(self) -> int:
+        frame_numbers = [
+            source.get_num_frames() for source in self._active_data_sources()
         ]
-        if len(missing_data_names) > 0:
-            raise ValueError(f"Datasets {missing_data_names} not found in data source")
+        print(f"Frames available : {frame_numbers}")
+        return min(frame_numbers)
 
     def read_new_frames(self) -> dict[str, NDArray]:
-        current_latest_frame = self.data_source.get_num_frames()
+        current_latest_frame = self.get_num_frames()
         self.logger.info(
             f"Frames available : {current_latest_frame}, "
-            f"last frame added : {self.last_frame_read}"
+            f"Last frame added : {self.last_frame_read}"
         )
+        all_data: dict[str, NDArray] = {}
         if current_latest_frame > self.last_frame_read:
-            new_data = self.data_source.read_data(
-                self.last_frame_read, current_latest_frame
-            )
+            # get data from all data sources
+            for source in self._active_data_sources():
+                all_data.update(
+                    source.read_data(self.last_frame_read, current_latest_frame)
+                )
+            for name, data in all_data.items():
+                self.logger.info(f"{name} - {data.shape}")
             self.last_frame_read = current_latest_frame
-            return new_data
-        return {}
+        return all_data
 
     def get_frame_number(self):
         return self.last_frame_read
@@ -347,6 +404,7 @@ class Processor:
         processed_data: dict[str, NDArray] = {}
         for config in self.processing_config:
             # Create list of NDArrays to be used by processing function
+            self.logger.info(f"Processing data for {config.output_path}")
             data = [all_data[name] for name in config.data_names]
 
             # run the processing function, pass the NDArrays as args.

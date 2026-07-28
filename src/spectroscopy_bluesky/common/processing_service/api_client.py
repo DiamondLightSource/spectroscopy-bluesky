@@ -3,10 +3,7 @@ from time import sleep
 from typing import Any
 
 import requests
-
-from spectroscopy_bluesky.common.processing_service import (
-    ProcessorSetup,
-)
+from pydantic import BaseModel
 
 
 class ProcessingClient:
@@ -35,7 +32,7 @@ class ProcessingClient:
         resp = requests.get(self.url + endpoint, params=json_data)
         return resp.json()
 
-    def start_processor(self, setup: ProcessorSetup) -> str:
+    def start_processor(self, setup: BaseModel) -> str:
         return self.put_json_request("start_processor", setup.model_dump())
 
     def get_task_status(self, task_id: str) -> dict[str, str]:

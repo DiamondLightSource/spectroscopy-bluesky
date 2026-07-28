@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import traceback
+import uuid
 from asyncio import Task
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,6 +21,20 @@ from spectroscopy_bluesky.common.processing_service import (
     ProcessorState,
 )
 
+
+def log_i0_it(i0, it):
+    ratio = i0 / it
+    bad_vals_filter = (ratio >= 0).astype(float)
+    val = np.log(ratio, where=(ratio > 0))
+    return bad_vals_filter * val
+
+
+def ff_i0(detector_ff, i0):
+    # multiply 2d detector ff for each det element by 1d i0 counts
+    # (converting 1d i0 array to 2d with inner dimension = 1)
+    return detector_ff * i0[:, None]
+
+
 FUNCTION_REGISTRY = {
     "value": lambda *vals: vals[0],
     "add": np.add,
@@ -26,7 +42,8 @@ FUNCTION_REGISTRY = {
     "multiply": np.multiply,
     "divide": np.divide,
     "log": np.log,
-    "lni0it": lambda *vals: np.log(vals[0], vals[1]),
+    "lni0it": log_i0_it,
+    "ffi0": ff_i0,
 }
 
 
@@ -37,12 +54,16 @@ class ProcessorJob:
     processor: Processor
     setup: ProcessorSetup
 
-    def get_status(self) -> dict[str, str]:
-        return {
+    def get_status(self) -> dict[str, Any]:
+        status: dict[str, Any] = {
             "start_time": self.start_time,
             "state": self.processor.get_state().name,
             "num_frames": str(self.processor.get_frame_number()),
         }
+        if self.processor.error_message is not None:
+            status["error_message"] = self.processor.error_message
+            status["error_traceback"] = self.processor.error_traceback
+        return status
 
 
 tasks: dict[str, ProcessorJob] = {}
@@ -96,20 +117,21 @@ def health():
 
 @app.put("/start_processor")
 async def start_processor(setup: ProcessorSetup):
-    print(f"start_processor called : {setup}")
-    print(f"Type : {type(setup)}")
+    logging.info(f"start_processor called : {setup}")
 
-    check_file_exists("Input file", setup.input_file)
-
-    hdf_datasource = HdfDatasource()
-    hdf_datasource.configure_source(setup.input_file)
+    hdf_datasources = []
+    for file in setup.input_files:
+        check_file_exists("Input file", file)
+        datasource = HdfDatasource()
+        datasource.configure_source(file)
+        hdf_datasources.append(datasource)
 
     hdf_writer = HdfDataWriter(setup.output_file)
 
     processing_config = [to_processing_config(step) for step in setup.processor_outputs]
-
+    logging.info(f"Processing config : {processing_config}")
     processor = Processor(
-        hdf_datasource,
+        hdf_datasources,
         processing_config,
         hdf_writer,
         no_new_data_timeout=setup.no_new_data_timeout,
@@ -120,12 +142,13 @@ async def start_processor(setup: ProcessorSetup):
         try:
             await asyncio.to_thread(processor.start_processing)
         except Exception as e:
-            print(f"Processing failed: {e}")
+            logging.error(f"Processing failed: {e}. "
+                          f"Traceback : {traceback.format_exc()}")
 
     timestamp = datetime.now().strftime("%Y-%m-%d %X")
 
     task = asyncio.create_task(async_wrapper())
-    task_id = str(id(task))
+    task_id = str(uuid.uuid4())
     tasks[task_id] = ProcessorJob(
         task=task, processor=processor, setup=setup, start_time=timestamp
     )
@@ -139,13 +162,12 @@ async def stop_task(task_id: str) -> dict[str, str]:
 
 
 @app.get("/task_status/{task_id}")
-async def get_task_status(task_id: str) -> dict[str, str]:
-    print(f"get_processor_state : {task_id}")
+async def get_task_status(task_id: str) -> dict[str, Any]:
     return get_task(task_id).get_status()
 
 
 @app.get("/task_status")
-async def get_all_task_status() -> dict[str, dict[str, str]]:
+async def get_all_task_status() -> dict[str, dict[str, Any]]:
     return {task_id: job.get_status() for task_id, job in tasks.items()}
 
 
