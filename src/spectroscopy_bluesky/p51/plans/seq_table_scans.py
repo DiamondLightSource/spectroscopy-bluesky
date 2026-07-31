@@ -19,18 +19,23 @@ from ophyd_async.core import (
     StrictEnum,
     SubsetEnum,
     SupersetEnum,
+    soft_signal_rw,
+    SignalRW,
 )
 from ophyd_async.epics.motor import Motor
 from ophyd_async.epics.pmac import (
     PmacTrajectoryTriggerLogic,
     PmacScanInfo,
 )
+import bluesky.plans as bp
 from ophyd_async.fastcs.panda import (
     HDFPanda,
     SeqTable,
     SeqTableInfo,
     StaticSeqTableTriggerLogic,
 )
+
+from bluesky.preprocessors import subs_decorator, stub_decorator
 from ophyd_async.plan_stubs import ensure_connected
 from ophyd_async.epics.core import epics_signal_r
 from scanspec.specs import Fly, Line
@@ -56,7 +61,63 @@ from .common import (
     setup_trajectory_scan_pvs,
 )
 
+from typing import cast
+
+from bluesky.callbacks.core import CollectThenCompute
+
 LOGGER = logging.getLogger(__name__)
+
+
+class ProcessData(CollectThenCompute):
+    def __init__(self):
+        super().__init__()
+        self.processed_signal = Callable[[SignalRW], None]
+
+    def start(self, doc):
+        self.results = []
+        self.reset()
+        self.start_doc: dict = doc
+        super().start(doc)
+
+    def extract_data(self, dict_key):
+        """Extract the x and y values (i.e. position of motor being
+        moved and detector readout) from the event documents"""
+        events = cast(dict, self._events)
+        val = [e["data"][dict_key] for e in events if dict_key in e["data"]]
+        timestamp = [
+            e["timestamps"][dict_key] for e in events if dict_key in e["timestamps"]
+        ]
+        return val, timestamp
+
+    def filter_average(self, dict_key, window):
+        val, _ = self.extract_data(dict_key)
+        return np.convolve(val, np.ones(window) / window, mode="same")
+
+    def calculate_threshold(self, dict_key, window, threshold):
+        val = self.filter_average(dict_key, window)
+        return np.any(val > threshold)
+
+    def plot_data(self, val, timestamp, filename):
+        import matplotlib.pyplot as plt
+
+        plt.figure(figsize=(10, 5))
+        plt.plot(timestamp, val)
+        plt.savefig(f"{filename}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+    def suspend_plan(self, dict_key, threshold, **kwargs):
+        val, _ = self.extract_data(dict_key)
+        if np.any(val > threshold):
+            print("Suspended atm")
+            bps.pause()
+
+    def compute(self):
+        """This method is called at run-stop time by the superclass."""
+        val, timestamp = self.extract_data("motor_readback")
+        filtered_data = self.filter_average("motor_readback", 2)
+        self.plot_data(val, timestamp, "before_filter")
+        self.plot_data(filtered_data, timestamp, "after_filter")
+        # self.processed_signal.set(10)
 
 
 def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
@@ -498,8 +559,47 @@ def seq_table_scan(
     # Log scan name and parameters
     LOGGER.info(f"Running {scan_name} plan with scan parameters {scan_parameters}")
 
-    @bpp.stage_decorator([*detectors])
-    @bpp.run_decorator(md=_md)
+    initial_value = np.array([0.1, 10.2], dtype=np.float64)
+
+    softSignal = soft_signal_rw(
+        Array1D[np.float64], initial_value=initial_value, name="processed_val"
+    )
+    process_motor_data = ProcessData()
+    process_motor_data.processed_signal = softSignal  # pyright: ignore
+
+    _md_ = {"user_info": "DAQ team"}
+
+    def retrieve_tiled_data():
+        from blueapi.service.authentication import TiledAuth
+        from blueapi.service.interface import context
+        from tiled.client import from_uri
+        from tiled.queries import Key
+
+        tiled_config = context().tiled_conf
+        tiled_client = from_uri(
+            str(tiled_config.url),
+            auth=TiledAuth(tiled_auth=tiled_config.authentication),
+        )
+        result = tiled_client.search(
+            Key("start.instrument_session") == "cm44254-1"
+        ).search(Key("start.plan_name") == "seq_table_uniform_scan")
+        scanData = result.values().last()
+        for key, data in scanData.items():
+            # Still running into read error with Panda HDF data so excluding it for now
+            if key != "primary2":
+                for key, data2 in data.items():
+                    # Print actual data
+                    print(key, data2.read())
+
+        # Add arbitrary data to softSignal
+        randArray = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        yield from bps.abs_set(softSignal, randArray, wait=True)
+
+    @stub_decorator()
+    def inner_squared_plan():
+        yield from bp.count([motor], 20, md=_md_)
+
+    @stub_decorator()
     def inner_plan():
         yield from bps.prepare(pmac_trajectory_flyer, pamc_trigger_logic, wait=True)
 
@@ -508,7 +608,7 @@ def seq_table_scan(
             for prepare in preparer_funcs:
                 yield from prepare()
 
-        yield from bps.declare_stream(*detectors, name="primary", collect=True)
+        yield from bps.declare_stream(*detectors, name="primary2", collect=True)
 
         for panda in detectors:
             yield from bps.kickoff(panda)
@@ -522,8 +622,32 @@ def seq_table_scan(
         yield from bps.collect_while_completing(
             flyers=[pmac_trajectory_flyer],
             dets=[*detectors],
-            stream_name="primary",
+            stream_name="primary2",
             flush_period=0.5,
         )
 
-    yield from inner_plan()
+    def append_processed_data():
+        yield from bps.monitor(softSignal, name="processed")
+        averaged_motor_readback = process_motor_data.filter_average(
+            dict_key="motor_readback", window=5
+        )
+        yield from bps.abs_set(softSignal, averaged_motor_readback, wait=True)
+
+        randArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        yield from bps.abs_set(softSignal, randArray, wait=True)
+        threshold_exceeded = process_motor_data.calculate_threshold(
+            dict_key="motor_readback", window=5, threshold=9.79382
+        )
+        if threshold_exceeded:
+            yield from inner_squared_plan()
+
+    @subs_decorator(process_motor_data)
+    @bpp.stage_decorator([*detectors])
+    @bpp.run_decorator(md=_md)
+    def combined_plan():
+        yield from inner_plan()
+        yield from inner_squared_plan()
+        # yield from append_processed_data()
+        yield from retrieve_tiled_data()
+
+    yield from combined_plan()
