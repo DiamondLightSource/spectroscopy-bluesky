@@ -113,11 +113,11 @@ class ProcessData(CollectThenCompute):
 
     def compute(self):
         """This method is called at run-stop time by the superclass."""
-        val, timestamp = self.extract_data("motor_readback")
-        filtered_data = self.filter_average("motor_readback", 2)
-        self.plot_data(val, timestamp, "before_filter")
-        self.plot_data(filtered_data, timestamp, "after_filter")
-        # self.processed_signal.set(10)
+        # val, timestamp = self.extract_data("motor_readback")
+        # filtered_data = self.filter_average("motor_readback", 2)
+        # self.plot_data(val, timestamp, "before_filter")
+        # self.plot_data(filtered_data, timestamp, "after_filter")
+        self.processed_signal.set(10)  # pyright: ignore
 
 
 def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
@@ -174,7 +174,7 @@ def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
 
         pv_signal = epics_signal_r(
             datatype,
-            pv_config["read_pv"].strip(),
+            pv_config["pv_name"].strip(),
             name=pv_name,
         )
 
@@ -284,8 +284,8 @@ def seq_table_energy_scan(
     element: str,
     edge: str,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008,
     number_of_sweeps: int = 1,
     readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
@@ -325,9 +325,9 @@ def seq_table_two_panda_scan(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
-    panda2: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008,
+    panda2: HDFPanda = inject("panda2"),  # noqa: B008,
     num_trajectory_points: int = 10,
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
@@ -380,8 +380,8 @@ def seq_table_uniform_scan(
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008,
     num_trajectory_points: int = 10,
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
@@ -635,11 +635,11 @@ def seq_table_scan(
 
         randArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         yield from bps.abs_set(softSignal, randArray, wait=True)
-        threshold_exceeded = process_motor_data.calculate_threshold(
-            dict_key="motor_readback", window=5, threshold=9.79382
-        )
-        if threshold_exceeded:
-            yield from inner_squared_plan()
+        # threshold_exceeded = process_motor_data.calculate_threshold(
+        #     dict_key="motor_readback", window=5, threshold=9.79382
+        # )
+        # if threshold_exceeded:
+        #     yield from inner_squared_plan()
 
     @subs_decorator(process_motor_data)
     @bpp.stage_decorator([*detectors])
@@ -647,7 +647,7 @@ def seq_table_scan(
     def combined_plan():
         yield from inner_plan()
         yield from inner_squared_plan()
-        # yield from append_processed_data()
+        yield from append_processed_data()
         yield from retrieve_tiled_data()
 
     yield from combined_plan()
