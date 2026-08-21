@@ -15,6 +15,7 @@ from spectroscopy_bluesky.p51.plans import (
     seq_table_energy_scan,
     seq_table_two_panda_scan,
     seq_table_uniform_scan,
+    restore_panda_settings, 
 )
 from spectroscopy_bluesky.p51.plans.sequence_table import (
     SpectrumBasedTrigger,
@@ -69,36 +70,41 @@ def two_seq_tables_plan() -> MsgGenerator:
     # yield from setup_seq_table_spectrum_triggers(panda_triggers, p, 2)
 
     readable_pvs = {
-        "motor_readback": {
-            "read_pv": "BL51P-OP-PCHRO-01:TS:XFINE.RBV  ",
-            "pv_datatype": "float",
+        # "motor_readback": {
+        #     "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.RBV  ",
+        #     "pv_datatype": "float",
+        # },
+        "diode_readback": {
+            "pv_name": "pva://BL51P-EA-PANDA-02:FmcIn:Val1",
+            "pv_datatype": "int",
+        #     # "min_threshold": "8",
+        #     # "max_threshold": "28",
+        #     # "monitor_pv_threshold": "bool",
         },
-        "motor_offset": {
-            "read_pv": "BL51P-MO-STEP-06:M4.RBV",
-            "pv_datatype": "float",
-        },
-        "feedrate": {
-            "read_pv": "BL51P-MO-STEP-06:FEEDRATE_RBV",
-            "pv_datatype": "float",
-        },
-        "pmactype": {
-            "read_pv": "BL51P-MO-STEP-06:PMACTYPE",
-            "pv_datatype": "str",
-        },
-        "motor_encoder": {
-            "read_pv": "BL51P-OP-PCHRO-01:TS:XFINE.UEIP",
-            "pv_datatype": "str",
-        },
+        # "feedrate": {
+        #     "pv_name": "BL51P-MO-STEP-06:FEEDRATE_RBV",
+        #     "pv_datatype": "float",
+        # },
+        # "pmactype": {
+        #     "pv_name": "BL51P-MO-STEP-06:PMACTYPE",
+        #     "pv_datatype": "str",
+        # },
+        # "motor_encoder": {
+        #     "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.UEIP",
+        #     "pv_datatype": "str",
+        # },
     }
     yield from seq_table_uniform_scan(
         0,
         5,
-        1.0,
-        5.0,
-        num_trajectory_points=10,
-        number_of_sweeps=6,
-        add_sweep_triggers=True,
-        spectrum_triggers=generate_test_triggers(),
+        0.002,
+        # 1,
+        # 0.5,
+        1,
+        num_trajectory_points= 100,
+        number_of_sweeps=1,
+        # add_sweep_triggers=True,
+        # spectrum_triggers=generate_test_triggers(),
         readable_pvs=readable_pvs,
         metadata={"user_comment": "this is a test"},
         motor=ts,
@@ -135,7 +141,12 @@ def energy_scan() -> MsgGenerator:
         panda=p,
     )
 
+def restore_panda() -> MsgGenerator: 
+    yield from restore_panda_settings(
+        panda = p, restore_settings=False, restore_dataset_settings=True, store_settings=False 
+    ) 
 
 RE(two_seq_tables_plan())
-RE(seq_table_two_panda_plan())
-RE(energy_scan())
+# RE(seq_table_two_panda_plan())
+# RE(energy_scan())
+# RE(restore_panda())

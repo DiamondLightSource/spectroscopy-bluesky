@@ -72,12 +72,28 @@ class ProcessData(CollectThenCompute):
     def __init__(self):
         super().__init__()
         self.processed_signal = Callable[[SignalRW], None]
+        self.processed_signal_name = ""
+        self.in_range = False
+        self.min_threshold = 1
+        self.max_threshold = 40
+        self.snr_db = 0
 
     def start(self, doc):
         self.results = []
         self.reset()
         self.start_doc: dict = doc
         super().start(doc)
+
+    def event(self, doc):
+        # print(f"event received{doc}")
+        # Check threshold hasnt been breached
+        # value = doc["data"]["motor_readback"]
+        # if value > self.min_threshold or value < self.max_threshold 
+        #     self.in_range = True
+        # else:
+        #     self.in_range = False
+        super().event(doc)
+
 
     def extract_data(self, dict_key):
         """Extract the x and y values (i.e. position of motor being
@@ -93,9 +109,9 @@ class ProcessData(CollectThenCompute):
         val, _ = self.extract_data(dict_key)
         return np.convolve(val, np.ones(window) / window, mode="same")
 
-    def calculate_threshold(self, dict_key, window, threshold):
-        val = self.filter_average(dict_key, window)
-        return np.any(val > threshold)
+    def monitor_threshold(self, dict_key, threshold):
+        val, _ = self.extract_data(dict_key)
+        return any(x > threshold for x in val)
 
     def plot_data(self, val, timestamp, filename):
         import matplotlib.pyplot as plt
@@ -113,11 +129,40 @@ class ProcessData(CollectThenCompute):
 
     def compute(self):
         """This method is called at run-stop time by the superclass."""
-        # val, timestamp = self.extract_data("motor_readback")
+        # self.snr_db = self.snr_db + 8
+
+        val, timestamp = self.extract_data("diode_readback")
+
+        print("starting the scan analysis")
+
+        from scipy.ndimage import gaussian_filter1d
+        from scipy.signal import find_peaks
+
+        filtered_data = gaussian_filter1d(val, sigma=2)
+
+        peaks, props = find_peaks(
+            filtered_data,
+            prominence=1.0,
+            distance=10
+        )
+
+        # Residual noise
+        noise = np.array(val) - filtered_data
+
+        # SNR calculation
+        signal_rms = np.sqrt(np.sum(filtered_data**2))
+        noise_rms = np.sqrt(np.sum(noise**2))
+
+        self.snr_db = 20 * np.log10(signal_rms / noise_rms)
+
+        print("Signal RMS =", signal_rms)
+        print("Noise RMS =", noise_rms)
+        print("SNR =", self.snr_db, "dB")
+
         # filtered_data = self.filter_average("motor_readback", 2)
         # self.plot_data(val, timestamp, "before_filter")
         # self.plot_data(filtered_data, timestamp, "after_filter")
-        self.processed_signal.set(10)  # pyright: ignore
+        # # self.processed_signal.set(10)  # pyright: ignore
 
 
 def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
@@ -166,6 +211,7 @@ def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
         "Sequence[SupersetEnum]": Sequence[SupersetEnum],
         "Table": Table,
     }
+    pvCallbacks = []
     for pv_name, pv_config in readable_pvs.items():
         datatype_str = pv_config["pv_datatype"].strip()
         if datatype_str not in datatype_map:
@@ -182,8 +228,21 @@ def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
             yield from ensure_connected(pv_signal)
         except Exception as e:
             raise RuntimeError(f"Failed to connect PV '{pv_name}'") from e
+        
+        # if pv_config["monitor_pv_threshold"]:
+        monitor_pv_threshold = True
+        if monitor_pv_threshold:
+            print("recorded")
+            pv_callback = ProcessData()
+            pv_callback.processed_signal = pv_signal 
+            pv_callback.processed_signal_name = pv_name
+            # pv_callback.min_threshold = int(pv_config["min_threshold"])
+            # pv_callback.max_threshold = int(pv_config["max_threshold"])
+            pv_callback.min_threshold = 30
+            pv_callback.max_threshold = 40
+            pvCallbacks.append(pv_callback)
 
-        yield from bps.monitor(pv_signal, name=pv_name)
+    return pvCallbacks
 
 
 def prepare_seq_table(
@@ -231,10 +290,10 @@ def prepare_seq_table(
 
     def inner_plan():
         if prepare_panda:
-            yield from bps.prepare(panda, trigger_info)
+            yield from bps.prepare(panda, trigger_info, wait=True)
         yield from bps.prepare(seqtable_flyer, seq_table_info, wait=True)
 
-        yield from bps.kickoff(seqtable_flyer)
+        yield from bps.kickoff(seqtable_flyer, wait=True)
         # panda is kicked off later - in seq_table_scan
 
     return inner_plan
@@ -393,46 +452,85 @@ def seq_table_uniform_scan(
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
 
-    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+    yield from bps.checkpoint()
+    
+    pv_callbacks = []
 
-    # setup a second seq table for 'spectrum based' triggering :
-    if panda_dict is None:
-        panda_dict = {}
-    if spectrum_triggers is not None:
-        seq_table = (
-            SeqTableBuilder()
-            .add_spectrum_based_triggers(spectrum_triggers)
-            .get_seq_table()
+    if readable_pvs is not None:
+        pv_callbacks = yield from prepare_pv_monitoring(readable_pvs)
+        print (f"pv_Calback1 is {pv_callbacks}")
+        n = 0
+        for pvs in pv_callbacks:
+            while True: 
+                if pvs.snr_db < pvs.min_threshold or pvs.snr_db > pvs.max_threshold :
+                    print("snr not in range")
+                    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+                    print(capture_positions)
+                    n=n+1
+                    stream_name = f"primary{n}"
+                    # setup a second seq table for 'spectrum based' triggering :
+                    if panda_dict is None:
+                        panda_dict = {}
+                    if spectrum_triggers is not None:
+                        seq_table = (
+                            SeqTableBuilder()
+                            .add_spectrum_based_triggers(spectrum_triggers)
+                            .get_seq_table()
+                        )
+
+                        prepare_triggers_seqtable = prepare_seq_table(
+                            panda, seq_table, 2, prepare_panda=False
+                        )
+                        panda_dict[panda] = [prepare_triggers_seqtable]
+
+                    scan_params_dict = {
+                        "scan_name": "seq_table_uniform_scan",
+                        "stepsize": stepsize,
+                        "spectrum_triggers": spectrum_triggers,
+                        "readable_pvs": readable_pvs,
+                        "metadata": metadata,
+                        "pv_callback": pv_callbacks,
+                        "stream_name": stream_name,
+                    }
+ 
+                    yield from seq_table_position_scan(
+                        start,
+                        stop,
+                        time_per_sweep,
+                        capture_positions,
+                        motor=motor,
+                        panda=panda,
+                        num_trajectory_points=num_trajectory_points,
+                        add_sweep_triggers=add_sweep_triggers,
+                        number_of_sweeps=number_of_sweeps,
+                        ramp_time=ramp_time,
+                        turnaround_time=turnaround_time,
+                        panda_dict=panda_dict,
+                        scan_params_dict=scan_params_dict,
+                    )
+                    stepsize = stepsize*2
+                    time_per_sweep = time_per_sweep + 1
+                else:
+                    print("snr is now in_range")
+                    # yield from bps.deferred_pause()
+                    break
+    else:   
+        capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+        yield from seq_table_position_scan(
+            start,
+            stop,
+            time_per_sweep,
+            capture_positions,
+            motor=motor,
+            panda=panda,
+            num_trajectory_points=num_trajectory_points,
+            add_sweep_triggers=add_sweep_triggers,
+            number_of_sweeps=number_of_sweeps,
+            ramp_time=ramp_time,
+            turnaround_time=turnaround_time,
+            panda_dict=panda_dict,
+            scan_params_dict=scan_params_dict, 
         )
-
-        prepare_triggers_seqtable = prepare_seq_table(
-            panda, seq_table, 2, prepare_panda=False
-        )
-        panda_dict[panda] = [prepare_triggers_seqtable]
-
-    scan_params_dict = {
-        "scan_name": "seq_table_uniform_scan",
-        "stepsize": stepsize,
-        "spectrum_triggers": spectrum_triggers,
-        "readable_pvs": readable_pvs,
-        "metadata": metadata,
-    }
-
-    yield from seq_table_position_scan(
-        start,
-        stop,
-        time_per_sweep,
-        capture_positions,
-        motor=motor,
-        panda=panda,
-        num_trajectory_points=num_trajectory_points,
-        add_sweep_triggers=add_sweep_triggers,
-        number_of_sweeps=number_of_sweeps,
-        ramp_time=ramp_time,
-        turnaround_time=turnaround_time,
-        panda_dict=panda_dict,
-        scan_params_dict=scan_params_dict,
-    )
 
 
 def seq_table_position_scan(
@@ -441,7 +539,7 @@ def seq_table_position_scan(
     time_per_sweep: float,
     capture_positions: NDArray,
     motor: Motor,
-    panda: HDFPanda,
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     num_trajectory_points: int = 10,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
@@ -453,7 +551,8 @@ def seq_table_position_scan(
 
     print(
         f"Num trajectorypoints : {num_trajectory_points}, "
-        f"time per traj point : {time_per_traj_point}"
+        f"time per traj point : {time_per_traj_point}",
+        f"step: {len(capture_positions)}"
     )
 
     # Prepare motor info using trajectory scanning
@@ -515,7 +614,7 @@ def seq_table_position_scan(
     )
     yield from seq_table_scan(spec, panda_dict, motor=motor, **kwargs)
 
-
+from bluesky.plans import adaptive_scan
 def seq_table_scan(
     scan_spec: Fly,
     panda_dict: dict[
@@ -543,6 +642,10 @@ def seq_table_scan(
 
     scan_parameters = kwargs.get("scan_params_dict") or {}
     scan_name = scan_parameters.get("scan_name")
+    pv_callback = scan_parameters.get("pv_callback")
+    stream_name = scan_parameters.get("stream_name")
+    print(f"pv callback is {pv_callback}")
+    print(f"stream name is {stream_name}")
 
     _md = {
         "plan_args": {
@@ -559,15 +662,13 @@ def seq_table_scan(
     # Log scan name and parameters
     LOGGER.info(f"Running {scan_name} plan with scan parameters {scan_parameters}")
 
+    # Define soft signal to add processed data
     initial_value = np.array([0.1, 10.2], dtype=np.float64)
-
     softSignal = soft_signal_rw(
         Array1D[np.float64], initial_value=initial_value, name="processed_val"
     )
     process_motor_data = ProcessData()
     process_motor_data.processed_signal = softSignal  # pyright: ignore
-
-    _md_ = {"user_info": "DAQ team"}
 
     def retrieve_tiled_data():
         from blueapi.service.authentication import TiledAuth
@@ -590,14 +691,45 @@ def seq_table_scan(
                 for key, data2 in data.items():
                     # Print actual data
                     print(key, data2.read())
+        
+        # randArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        # yield from bps.abs_set(softSignal, randArray, wait=True)
+        yield from bps.sleep(1)
 
-        # Add arbitrary data to softSignal
-        randArray = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    def append_processed_data():
+        yield from bps.monitor(softSignal, name="processed")
+        averaged_softSignal = process_softSignal.filter_average(
+            dict_key="motor_readback", window=5
+        )
+        yield from bps.abs_set(softSignal, averaged_softSignal, wait=True)
+
+        randArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         yield from bps.abs_set(softSignal, randArray, wait=True)
+        threshold_exceeded = process_softSignal.monitor_threshold(
+                dict_key="motor_readback", threshold=9.79382
+            )
+        if threshold_exceeded:
+            yield from inner_squared_plan()
+
 
     @stub_decorator()
     def inner_squared_plan():
-        yield from bp.count([motor], 20, md=_md_)
+        # print("running adaptive scan")
+        # _md_ = {"user_info": "adaptive scan using bluesky"}
+        # yield from bp.adaptive_scan(
+        #     [*detectors], 
+        #     'inenc-1-val_dataset', 
+        #     motor,
+        #     start=-15,
+        #     stop=10,
+        #     min_step=0.01,
+        #     max_step=5,
+        #     target_delta=.05,
+        #     backstep=True,
+        #     threshold = 10,
+        #     md=_md_
+        # )
+        yield from bp.count([motor], 20)
 
     @stub_decorator()
     def inner_plan():
@@ -608,46 +740,35 @@ def seq_table_scan(
             for prepare in preparer_funcs:
                 yield from prepare()
 
-        yield from bps.declare_stream(*detectors, name="primary2", collect=True)
+        yield from bps.declare_stream(*detectors, name="primary", collect=True)
 
         for panda in detectors:
             yield from bps.kickoff(panda)
 
         # Prepare pmac with the trajectory
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
-
-        if scan_parameters.get("readable_pvs") is not None:
-            yield from prepare_pv_monitoring(scan_parameters["readable_pvs"])
+        
+        for pvs in pv_callback:
+            yield from bps.monitor(pvs.processed_signal, name=pvs.processed_signal_name)
 
         yield from bps.collect_while_completing(
             flyers=[pmac_trajectory_flyer],
             dets=[*detectors],
-            stream_name="primary2",
+            stream_name="primary",
             flush_period=0.5,
         )
 
-    def append_processed_data():
-        yield from bps.monitor(softSignal, name="processed")
-        averaged_motor_readback = process_motor_data.filter_average(
-            dict_key="motor_readback", window=5
-        )
-        yield from bps.abs_set(softSignal, averaged_motor_readback, wait=True)
-
-        randArray = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-        yield from bps.abs_set(softSignal, randArray, wait=True)
-        # threshold_exceeded = process_motor_data.calculate_threshold(
-        #     dict_key="motor_readback", window=5, threshold=9.79382
-        # )
-        # if threshold_exceeded:
-        #     yield from inner_squared_plan()
-
-    @subs_decorator(process_motor_data)
+    @subs_decorator(pv_callback)
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator(md=_md)
     def combined_plan():
+
         yield from inner_plan()
-        yield from inner_squared_plan()
-        yield from append_processed_data()
-        yield from retrieve_tiled_data()
+
+        # yield from inner_plan()
+        # yield from inner_squared_plan()
+        # yield from append_processed_data()
+        # yield from retrieve_tiled_data()
 
     yield from combined_plan()
+    print("end of plan")

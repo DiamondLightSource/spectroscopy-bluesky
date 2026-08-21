@@ -50,25 +50,23 @@ def setup_trajectory_scan_pvs(prefix: str = "BL51P-MO-STEP-06"):
     yield from bps.mv(cs_axis_label, "X", cs_profile_name, "PMAC6CS3")
     yield from bps.sleep(0.5)  # wait for the records to update
 
-
+from dodal.common.coordination import inject
 def restore_panda_settings(
-    detectors: list[HDFPanda],
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
     restore_settings: bool = False,
     restore_dataset_settings: bool = False,
     store_settings: bool = False,
 ) -> MsgGenerator:
+    if restore_settings:
+        yield from plan_restore_settings(panda=panda, name=f"seq_table_{panda.name}")
 
-    for dets in detectors:
-        if restore_settings:
-            yield from plan_restore_settings(panda=dets, name=f"seq_table_{dets.name}")
+    if restore_dataset_settings:
+        yield from plan_restore_dataset_settings(
+            panda=panda, name=f"seq_table_{panda.name}"
+        )
 
-        if restore_dataset_settings:
-            yield from plan_restore_dataset_settings(
-                panda=dets, name=f"seq_table_{dets.name}"
-            )
-
-        if store_settings:
-            yield from plan_store_settings(panda=dets, name=f"seq_table_{dets.name}")
+    if store_settings:
+        yield from plan_store_settings(panda=panda, name=f"seq_table_{panda.name}")
 
 
 def plan_store_settings(panda: HDFPanda, name: str):
@@ -87,12 +85,12 @@ def plan_restore_dataset_settings(panda: HDFPanda, name: str):
     dataset, others = settings.partition(
         lambda signal: (
             signal.name.endswith("_dataset")
-            and any(k in signal.name for k in ["out", "val", "pos"])
+            and any(k in signal.name for k in ["out", "val", "pos", "pcap"])
         )
     )
     settings_dict = {
-        signal: (value if value else signal.name.replace(".", "_"))
-        for signal, value in dataset.items()
+        signal: value
+        for signal, value in dataset.items() if value != ""
     }
     new_dataset = Settings(panda, settings_dict)
     yield from apply_settings(new_dataset)
