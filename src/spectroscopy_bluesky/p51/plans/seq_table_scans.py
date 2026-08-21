@@ -51,7 +51,7 @@ from spectroscopy_bluesky.common.xas_scans import (
     XasScanPointGenerator,
 )
 
-from .common import get_encoder_counts, setup_trajectory_scan_pvs, MRES
+from .common import get_encoder_counts, setup_trajectory_scan_pvs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -431,6 +431,17 @@ def seq_table_gated_trigger(
     pos_trigs[0::step] = [False] * (2)
     gate_trig = pos_trigs[1:]
     gate_trig.append(False)
+
+    # Create an offseted and scaled sine wave for the trajectory
+    rad = np.arange(0, 2 * np.pi, 0.01)
+    scale = 1.1 * np.abs(stop - start)
+    mov_dir = -1 if start < stop else 1
+    deg = (mov_dir * scale / 2) * np.cos(rad)
+    inner_spec = Array(axis=motor, array=None, bounds=deg)
+    traj_rep = int(number_of_sweeps / 2) if number_of_sweeps > 1 else number_of_sweeps
+    spec = Fly(time_per_traj_point @ (traj_rep * inner_spec))
+    print(f"Scale for the wave: {scale}")
+
     scan_params_dict = {
         "scan_name": "seq_table_uniform_scan",
         "stepsize": stepsize,
@@ -445,15 +456,6 @@ def seq_table_gated_trigger(
         "time2": extension * np.ones(len(gate_trig), dtype=np.uint32),
     }
 
-    # Create an offseted sine wave for the trajectory
-    rad = np.arange(0, 2 * np.pi, 0.01)
-    scale = 1.5 * np.abs(stop - start)
-    mov_dir = -1 if start < stop else 1
-    deg = (mov_dir * scale / 2) * np.cos(rad)
-    inner_spec = Array(axis=motor, array=None, bounds=deg)
-    kwargs["custom_spec"] = inner_spec
-    print(f"Scale for the wave: {scale}")
-
     yield from seq_table_position_scan(
         start,
         stop,
@@ -464,12 +466,13 @@ def seq_table_gated_trigger(
         num_trajectory_points=num_trajectory_points,
         add_sweep_triggers=add_sweep_triggers,
         number_of_sweeps=number_of_sweeps,
-        ramp_time=ramp_time,
-        turnaround_time=turnaround_time,
         panda_dict=panda_dict,
         scan_params_dict=scan_params_dict,
+        custom_spec=spec,
         gated_trigs=gated_trigs,
-        kwargs=kwargs,
+        panda_debug=kwargs.get("panda_debug")
+        if kwargs.get("panda_debug") is not None
+        else None,
     )
 
 
@@ -487,13 +490,17 @@ def seq_table_position_scan(
     **kwargs: Any,
 ) -> MsgGenerator:
     time_per_traj_point = time_per_sweep / num_trajectory_points
+    print(f"kwargs.keys() = {kwargs.keys()}")
 
     print(
         f"Num trajectorypoints : {num_trajectory_points}, "
         f"time per traj point : {time_per_traj_point}"
     )
 
-    if kwargs.get("custom_spec") is not None:
+    if kwargs.get("custom_spec") is not None and isinstance(
+        kwargs.get("custom_spec"), Fly
+    ):
+        print("running custom spec")
         spec = kwargs.get("custom_spec")
     else:
         # Prepare motor info using trajectory scanning
@@ -548,6 +555,7 @@ def seq_table_position_scan(
     panda_dict.setdefault(panda, [prepare_position_seqtable, prepare_panda_data(panda)])
 
     if "panda_debug" in kwargs.keys():
+        print("panda_debug in kwargs.keys")
         panda_dict[kwargs["panda_debug"]] = [
             prepare_panda_data(panda=kwargs["panda_debug"])
         ]
@@ -571,7 +579,7 @@ def seq_table_position_scan(
             "num_seqtable_repeats": num_seqtable_repeats,
         }
     )
-    yield from seq_table_scan(spec, panda_dict, motor=motor, **kwargs)
+    yield from seq_table_scan(spec, panda_dict, motor=motor, **kwargs)  # pyright: ignore[reportArgumentType]
 
 
 def seq_table_scan(
@@ -627,7 +635,7 @@ def seq_table_scan(
             for prepare in preparer_funcs:
                 yield from prepare()
 
-        yield from bps.declare_stream(*detectors, name="primary", collect=True)
+        yield from bps.declare_stream(*detectors, name="primary", collect=False)
 
         for panda in detectors:
             yield from bps.kickoff(panda)
