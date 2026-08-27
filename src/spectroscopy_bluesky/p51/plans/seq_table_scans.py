@@ -131,7 +131,6 @@ def prepare_seq_table(
     seq_table_number: int = 1,
     num_repeats: int = 1,
     prescale_as_us: float = 1,
-    prepare_panda: bool = True,
 ) -> Callable[[], MsgGenerator]:
     """Return a function that can be used to prepare and arm (kickoff) a
     panda sequence table
@@ -143,8 +142,6 @@ def prepare_seq_table(
                                 Defaults to 1.
         num_repeats (int, optional): Number of repeats of sequence table. Defaults to 1.
         prescale_as_us (float, optional): _description_. Defaults to 1.
-        prepare_panda (bool, optional): If true, add calls to also arm the panda as well
-        as the sequence table. Defaults to True.
 
     Returns:
         Callable[[], MsgGenerator]: _description_
@@ -161,20 +158,39 @@ def prepare_seq_table(
         StaticSeqTableTriggerLogic(panda.seq[seq_table_number])
     )
 
+    def inner_plan():
+        yield from bps.prepare(seqtable_flyer, seq_table_info, wait=True)
+
+        yield from bps.kickoff(seqtable_flyer)
+        # panda is kicked off later - in seq_table_scan
+
+    return inner_plan
+
+
+def prepare_panda_data(
+    panda: HDFPanda,
+) -> Callable[[], MsgGenerator]:
+    """Return a function that can be used to prepare and arm (kickoff) a
+    panda data.
+
+    Args:
+        panda (HDFPanda): Panda object to be operated on
+
+    Returns:
+        Callable[[], MsgGenerator]: _description_
+
+    Yields:
+        Iterator[Callable[[], MsgGenerator]]: _description_
+    """
     trigger_info = TriggerInfo(
-        number_of_events=len(seq_table),
+        number_of_events=0,
         trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=1e-5,
         deadtime=1e-5,
     )
 
     def inner_plan():
-        if prepare_panda:
-            yield from bps.prepare(panda, trigger_info)
-        yield from bps.prepare(seqtable_flyer, seq_table_info, wait=True)
-
-        yield from bps.kickoff(seqtable_flyer)
-        # panda is kicked off later - in seq_table_scan
+        yield from bps.prepare(panda, trigger_info, wait=True)
 
     return inner_plan
 
@@ -290,7 +306,7 @@ def seq_table_two_panda_scan(
         prepare_triggers_seqtable = prepare_seq_table(
             panda2, seq_table, 1, num_seqtable_repeats
         )
-        panda_dict[panda2] = [prepare_triggers_seqtable]
+        panda_dict[panda2] = [prepare_triggers_seqtable, prepare_panda_data(panda2)]
 
     scan_params_dict = {
         "scan_name": "seq_table_two_panda_scan",
@@ -331,7 +347,6 @@ def seq_table_uniform_scan(
     readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
-
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
     # setup a second seq table for 'spectrum based' triggering :
@@ -344,10 +359,8 @@ def seq_table_uniform_scan(
             .get_seq_table()
         )
 
-        prepare_triggers_seqtable = prepare_seq_table(
-            panda, seq_table, 2, prepare_panda=False
-        )
-        panda_dict[panda] = [prepare_triggers_seqtable]
+        prepare_triggers_seqtable = prepare_seq_table(panda, seq_table, 2)
+        panda_dict[panda] = [prepare_triggers_seqtable, prepare_panda_data(panda)]
 
     scan_params_dict = {
         "scan_name": "seq_table_uniform_scan",
@@ -387,7 +400,6 @@ def seq_table_position_scan(
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
     **kwargs: Any,
 ) -> MsgGenerator:
-
     time_per_traj_point = time_per_sweep / num_trajectory_points
 
     print(
@@ -431,7 +443,12 @@ def seq_table_position_scan(
     )
     # append position sequence table setup to panda entry (make empty list first
     # if not already present).
-    panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
+    panda_dict.setdefault(panda, [prepare_position_seqtable, prepare_panda_data(panda)])
+
+    if "panda_debug" in kwargs.keys():
+        panda_dict[kwargs["panda_debug"]] = [
+            prepare_panda_data(panda=kwargs["panda_debug"])
+        ]
 
     if kwargs.get("scan_params_dict") is None:
         kwargs["scan_params_dict"] = {}
