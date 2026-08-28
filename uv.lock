@@ -6,10 +6,10 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.12' and sys_platform == 'win32'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version >= '3.12' and python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and sys_platform == 'emscripten'",
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
@@ -2515,7 +2515,7 @@ wheels = [
 
 [[package]]
 name = "ophyd-async"
-version = "0.19.3"
+version = "0.21.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bluesky" },
@@ -2530,9 +2530,9 @@ dependencies = [
     { name = "stamina" },
     { name = "velocity-profile" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1d/20/1241051befc05c21c958206611f9ed058d81b8e8f92e3acf9f9d6936f2fc/ophyd_async-0.19.3.tar.gz", hash = "sha256:9cb76a8a08794a26c619a0420012e7248542501d036f16f3314221869e989984", size = 595679, upload-time = "2026-06-29T15:21:37.859Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/2d/af70bad5aedc290253157e4d3cb6bb0e88160fb373820e2944b7508b741e/ophyd_async-0.21.2.tar.gz", hash = "sha256:51b4163eae5a88339cbe8042ff153db26a32b97da4d7eef0e28c5f63ece5c64c", size = 678594, upload-time = "2026-08-28T15:03:49.625Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/2c/76ac5e485f6405fc0f1dbbd1c98b7c1137d4aa5c1e49ea9e69bbd8d22ae1/ophyd_async-0.19.3-py3-none-any.whl", hash = "sha256:ef6201edb52e5a54008d57cad1808626aa6493ba4a8fd015e08d14bcffbb697a", size = 232796, upload-time = "2026-06-29T15:21:36.46Z" },
+    { url = "https://files.pythonhosted.org/packages/57/a1/927924a80dc4fd58f3777783379bfb5b27159db4b258276c0824a8a7afa1/ophyd_async-0.21.2-py3-none-any.whl", hash = "sha256:eac362e897db1a3c667001c9a04f8b5b77e8716f040609887bd86c2e228841a4", size = 261323, upload-time = "2026-08-28T15:03:48.309Z" },
 ]
 
 [package.optional-dependencies]
@@ -3965,7 +3965,7 @@ requires-dist = [
     { name = "h5py" },
     { name = "matplotlib" },
     { name = "ophyd" },
-    { name = "ophyd-async", specifier = "==0.19.3" },
+    { name = "ophyd-async", specifier = "==0.21.2" },
     { name = "pandas" },
     { name = "scipy" },
     { name = "typer" },
