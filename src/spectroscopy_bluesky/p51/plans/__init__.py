@@ -5,6 +5,7 @@ from .common import (
 from .seq_table_scans import (
     prepare_seq_table,
     seq_table_energy_scan,
+    seq_table_gated_trigger,
     seq_table_non_linear,
     seq_table_two_panda_scan,
     seq_table_uniform_scan,
@@ -25,6 +26,7 @@ __all__ = [
     "seq_table_two_panda_scan",
     "seq_table_energy_scan",
     "trajectory_fly_scan",
+    "seq_table_gated_trigger",
     "prepare_seq_table",
     "restore_panda_settings",
     "plan_store_settings",

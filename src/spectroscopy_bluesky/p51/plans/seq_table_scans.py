@@ -33,7 +33,7 @@ from ophyd_async.fastcs.panda import (
 )
 from ophyd_async.plan_stubs import ensure_connected
 from ophyd_async.epics.core import epics_signal_r
-from scanspec.specs import Fly, Line
+from scanspec.specs import Fly, Line, Array
 from collections.abc import Callable
 
 from spectroscopy_bluesky.common.quantity_conversion import (
@@ -51,10 +51,7 @@ from spectroscopy_bluesky.common.xas_scans import (
     XasScanPointGenerator,
 )
 
-from .common import (
-    get_encoder_counts,
-    setup_trajectory_scan_pvs,
-)
+from .common import get_encoder_counts, setup_trajectory_scan_pvs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -131,7 +128,6 @@ def prepare_seq_table(
     seq_table_number: int = 1,
     num_repeats: int = 1,
     prescale_as_us: float = 1,
-    prepare_panda: bool = True,
 ) -> Callable[[], MsgGenerator]:
     """Return a function that can be used to prepare and arm (kickoff) a
     panda sequence table
@@ -143,8 +139,6 @@ def prepare_seq_table(
                                 Defaults to 1.
         num_repeats (int, optional): Number of repeats of sequence table. Defaults to 1.
         prescale_as_us (float, optional): _description_. Defaults to 1.
-        prepare_panda (bool, optional): If true, add calls to also arm the panda as well
-        as the sequence table. Defaults to True.
 
     Returns:
         Callable[[], MsgGenerator]: _description_
@@ -161,20 +155,39 @@ def prepare_seq_table(
         StaticSeqTableTriggerLogic(panda.seq[seq_table_number])
     )
 
+    def inner_plan():
+        yield from bps.prepare(seqtable_flyer, seq_table_info, wait=True)
+
+        yield from bps.kickoff(seqtable_flyer)
+        # panda is kicked off later - in seq_table_scan
+
+    return inner_plan
+
+
+def prepare_panda_data(
+    panda: HDFPanda,
+) -> Callable[[], MsgGenerator]:
+    """Return a function that can be used to prepare and arm (kickoff) a
+    panda data.
+
+    Args:
+        panda (HDFPanda): Panda object to be operated on
+
+    Returns:
+        Callable[[], MsgGenerator]: _description_
+
+    Yields:
+        Iterator[Callable[[], MsgGenerator]]: _description_
+    """
     trigger_info = TriggerInfo(
-        number_of_events=len(seq_table),
+        number_of_events=0,
         trigger=DetectorTrigger.EXTERNAL_LEVEL,
         livetime=1e-5,
         deadtime=1e-5,
     )
 
     def inner_plan():
-        if prepare_panda:
-            yield from bps.prepare(panda, trigger_info)
-        yield from bps.prepare(seqtable_flyer, seq_table_info, wait=True)
-
-        yield from bps.kickoff(seqtable_flyer)
-        # panda is kicked off later - in seq_table_scan
+        yield from bps.prepare(panda, trigger_info, wait=True)
 
     return inner_plan
 
@@ -290,7 +303,7 @@ def seq_table_two_panda_scan(
         prepare_triggers_seqtable = prepare_seq_table(
             panda2, seq_table, 1, num_seqtable_repeats
         )
-        panda_dict[panda2] = [prepare_triggers_seqtable]
+        panda_dict[panda2] = [prepare_triggers_seqtable, prepare_panda_data(panda2)]
 
     scan_params_dict = {
         "scan_name": "seq_table_two_panda_scan",
@@ -331,7 +344,6 @@ def seq_table_uniform_scan(
     readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
-
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
 
     # setup a second seq table for 'spectrum based' triggering :
@@ -344,10 +356,8 @@ def seq_table_uniform_scan(
             .get_seq_table()
         )
 
-        prepare_triggers_seqtable = prepare_seq_table(
-            panda, seq_table, 2, prepare_panda=False
-        )
-        panda_dict[panda] = [prepare_triggers_seqtable]
+        prepare_triggers_seqtable = prepare_seq_table(panda, seq_table, 2)
+        panda_dict[panda] = [prepare_triggers_seqtable, prepare_panda_data(panda)]
 
     scan_params_dict = {
         "scan_name": "seq_table_uniform_scan",
@@ -374,6 +384,98 @@ def seq_table_uniform_scan(
     )
 
 
+def seq_table_gated_trigger(
+    start: float,
+    stop: float,
+    stepsize: float,
+    time_per_sweep: float,
+    motor: Motor,
+    panda: HDFPanda,
+    num_trajectory_points: int = 10,
+    extension: int = 1,
+    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    add_sweep_triggers: bool = False,
+    number_of_sweeps: int = 4,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
+    panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    readable_pvs: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+    **kwargs: Any,
+):
+    """Position based scan using the sequencer table and a gated trigger."""
+    num = abs(int(((stop + stepsize) - start) / stepsize))
+
+    time_per_traj_point = time_per_sweep / num
+
+    rep = 2 if number_of_sweeps > 1 else 1
+    trig_spec = Fly(float(time_per_traj_point) @ (rep * ~Line(motor, start, stop, num)))
+
+    capture_positions = np.zeros(len(trig_spec.frames().lower[motor]) + 2)
+    sweep = "pos" if stop > start else "neg"
+    lower = trig_spec.frames().lower[motor]
+    upper = trig_spec.frames().upper[motor]
+
+    if sweep == "pos":
+        first, second = lower, upper
+    else:
+        first, second = upper, lower
+
+    # Fill positions
+    capture_positions[: num + 1] = first[: num + 1]  # first block
+    capture_positions[num + 1 :] = second[-(num + 1) :]  # last block
+
+    pos_trigs = [True] * capture_positions.size
+    gate_trig = [True] * capture_positions.size
+    step = num + 1
+    pos_trigs[0::step] = [False] * (2)
+    gate_trig = pos_trigs[1:]
+    gate_trig.append(False)
+
+    # Create an offseted and scaled sine wave for the trajectory
+    rad = np.arange(0, 2 * np.pi, 0.01)
+    scale = 1.1 * np.abs(stop - start)
+    mov_dir = -1 if start < stop else 1
+    deg = (mov_dir * scale / 2) * np.cos(rad)
+    inner_spec = Array(axis=motor, array=None, bounds=deg)
+    traj_rep = int(number_of_sweeps / 2) if number_of_sweeps > 1 else number_of_sweeps
+    spec = Fly(time_per_traj_point @ (traj_rep * inner_spec))
+    print(f"Scale for the wave: {scale}")
+
+    scan_params_dict = {
+        "scan_name": "seq_table_uniform_scan",
+        "stepsize": stepsize,
+        "spectrum_triggers": spectrum_triggers,
+        "readable_pvs": readable_pvs,
+        "metadata": metadata,
+    }
+    gated_trigs = {
+        "pos": np.array(pos_trigs, dtype=np.uint32),
+        "gate": np.array(gate_trig, dtype=np.uint32),
+        "time1": np.ones(len(gate_trig), dtype=np.uint32),
+        "time2": extension * np.ones(len(gate_trig), dtype=np.uint32),
+    }
+
+    yield from seq_table_position_scan(
+        start,
+        stop,
+        time_per_sweep,
+        capture_positions[0 : num + 1],
+        motor=motor,
+        panda=panda,
+        num_trajectory_points=num_trajectory_points,
+        add_sweep_triggers=add_sweep_triggers,
+        number_of_sweeps=number_of_sweeps,
+        panda_dict=panda_dict,
+        scan_params_dict=scan_params_dict,
+        custom_spec=spec,
+        gated_trigs=gated_trigs,
+        panda_debug=kwargs.get("panda_debug")
+        if kwargs.get("panda_debug") is not None
+        else None,
+    )
+
+
 def seq_table_position_scan(
     start: float,
     stop: float,
@@ -387,19 +489,25 @@ def seq_table_position_scan(
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
     **kwargs: Any,
 ) -> MsgGenerator:
-
     time_per_traj_point = time_per_sweep / num_trajectory_points
+    print(f"kwargs.keys() = {kwargs.keys()}")
 
     print(
         f"Num trajectorypoints : {num_trajectory_points}, "
         f"time per traj point : {time_per_traj_point}"
     )
 
-    # Prepare motor info using trajectory scanning
-    spec = Fly(
-        time_per_traj_point
-        @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
-    )
+    if kwargs.get("custom_spec") is not None and isinstance(
+        kwargs.get("custom_spec"), Fly
+    ):
+        print("running custom spec")
+        spec = kwargs.get("custom_spec")
+    else:
+        # Prepare motor info using trajectory scanning
+        spec = Fly(
+            time_per_traj_point
+            @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
+        )
 
     # add points to capture positions on the reverse sweep
     if number_of_sweeps > 1:
@@ -418,7 +526,20 @@ def seq_table_position_scan(
     # Use multiple repetitions of seq table to capture subsequent sweeps.
     seqTable_builder = SeqTableBuilder()
     seqTable_builder.convert_to_encoder = get_encoder_counts
-    seqTable_builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
+    if kwargs.get("gated_trigs") is not None:
+        seqTable_builder.add_positions(
+            positions,
+            time1=kwargs["gated_trigs"]["time1"],
+            outa1=kwargs["gated_trigs"]["pos"],
+            outb1=kwargs["gated_trigs"]["gate"],
+            time2=kwargs["gated_trigs"]["time2"],
+            outa2=np.zeros(len(kwargs["gated_trigs"]["gate"]), dtype=np.bool_),
+            outb2=kwargs["gated_trigs"]["gate"],
+        )
+    else:
+        seqTable_builder.add_positions(
+            positions, time1=1, outa1=True, time2=1, outa2=False
+        )
     if add_sweep_triggers:
         seqTable_builder.add_start_end_triggers("outb1", "outc1")
 
@@ -431,7 +552,13 @@ def seq_table_position_scan(
     )
     # append position sequence table setup to panda entry (make empty list first
     # if not already present).
-    panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
+    panda_dict.setdefault(panda, [prepare_position_seqtable, prepare_panda_data(panda)])
+
+    if "panda_debug" in kwargs.keys():
+        print("panda_debug in kwargs.keys")
+        panda_dict[kwargs["panda_debug"]] = [
+            prepare_panda_data(panda=kwargs["panda_debug"])
+        ]
 
     if kwargs.get("scan_params_dict") is None:
         kwargs["scan_params_dict"] = {}
@@ -452,7 +579,7 @@ def seq_table_position_scan(
             "num_seqtable_repeats": num_seqtable_repeats,
         }
     )
-    yield from seq_table_scan(spec, panda_dict, motor=motor, **kwargs)
+    yield from seq_table_scan(spec, panda_dict, motor=motor, **kwargs)  # pyright: ignore[reportArgumentType]
 
 
 def seq_table_scan(
@@ -508,7 +635,7 @@ def seq_table_scan(
             for prepare in preparer_funcs:
                 yield from prepare()
 
-        yield from bps.declare_stream(*detectors, name="primary", collect=True)
+        yield from bps.declare_stream(*detectors, name="primary", collect=False)
 
         for panda in detectors:
             yield from bps.kickoff(panda)
