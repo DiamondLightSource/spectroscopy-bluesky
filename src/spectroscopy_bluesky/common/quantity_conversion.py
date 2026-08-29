@@ -65,13 +65,13 @@ def crystal_spacing(lattice_parameter: float, miller_indices: list[int]) -> floa
         indices (list[int]): Miller indices (h,k,l)
 
     Raises:
-        Exception: if number of Miller indices != 3
+        ValueError: if number of Miller indices != 3
 
     Returns:
         float: crystal lattice spacing
     """
     if len(miller_indices) != 3:
-        raise Exception(
+        raise ValueError(
             "Need 3 values for the Miller indices to calculate lattice spacing!",
         )
 
@@ -117,8 +117,8 @@ def energy_to_bragg_angle(
 
 def bragg_angle_to_energy(
     lattice_spacing: float,
-    bragg_angle_degrees: ArrayOrScalar,
-) -> ArrayOrScalar:
+    bragg_angle_degrees: T,
+) -> T:
     """Convert Bragg angle (degrees) to energy (ev)
 
     Args:
@@ -146,7 +146,7 @@ def wavelength_to_bragg_angle(
             (Default == True).
 
     Raises:
-        Exception: if wavelength > 2*lattice_spacing
+        ValueError: if wavelength > 2*lattice_spacing
 
     Returns:
         NDArray|float|int: Bragg angle (radians or degrees, depending on return_radians)
@@ -158,13 +158,13 @@ def wavelength_to_bragg_angle(
     too_big = False
     if type(val) is float | int and val > 1:
         too_big = True
-    if isinstance(val, np.ndarray) and (val > 1).any():  # type: ignore
+    if isinstance(val, np.ndarray | np.generic) and (val > 1).any():  # type: ignore
         too_big = True
 
     if too_big:
-        raise Exception(
-            f"Wavelength {wavelength_angstroms} Angstroms is too large for "
-            "lattice spacing {lattice_spacing/angstrom} Angstroms!",
+        raise ValueError(
+            f"Wavelength {wavelength_angstroms:.6f} Angstroms is too large for "
+            f"lattice spacing {lattice_spacing / angstrom:.6f} Angstroms!",
         )
 
     theta = np.asin(val)

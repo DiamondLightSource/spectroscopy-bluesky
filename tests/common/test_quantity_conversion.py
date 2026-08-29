@@ -1,8 +1,11 @@
+import math
+
 import pytest
 
 from spectroscopy_bluesky.common.quantity_conversion import (
     bragg_angle_to_energy,
     bragg_angle_to_wavelength,
+    crystal_spacing,
     energy_to_bragg_angle,
     ev_to_wavelength,
     ev_to_wavevector,
@@ -83,3 +86,25 @@ def test_bragg_wavelength(angle, expected_wavelength):
     assert wavelength_to_bragg_angle(
         si_311_lattice_spacing, wavelength
     ) == pytest.approx(angle, angle_tolerance)
+
+
+@pytest.mark.parametrize(
+    "indices",
+    [([1, 1, 1]), ([3, 1, 1]), ([4, 1, 1])],
+)
+def test_crystal_spacing(indices: list[int]):
+    print(indices)
+    spacing = crystal_spacing(1.0, indices)
+    sum2 = sum(i * i for i in indices)
+    assert spacing == pytest.approx(1.0 / math.sqrt(sum2), 1e-6)
+
+
+def test_too_large_wavelength_raises_exception():
+    wavelength = si_311_lattice_spacing * 4.0 / 1e-10
+    with pytest.raises(ValueError):
+        wavelength_to_bragg_angle(si_311_lattice_spacing, wavelength)
+
+
+def test_bad_miller_indices_raises_expception():
+    with pytest.raises(ValueError):
+        crystal_spacing(1, [1])
