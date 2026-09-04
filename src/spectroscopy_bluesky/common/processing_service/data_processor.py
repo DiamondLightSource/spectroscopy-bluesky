@@ -1,164 +1,15 @@
 import logging
 import traceback
-from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from time import sleep, time
 from typing import Any
 
-import h5py
 from h5py import Dataset, File
 from numpy.typing import NDArray
 
-
-class Datasource(ABC):
-    @abstractmethod
-    def configure_source(self, source_path: str):
-        pass
-
-    @abstractmethod
-    def connect(self):
-        pass
-
-    @abstractmethod
-    def is_connected(self) -> bool:
-        pass
-
-    @abstractmethod
-    def close(self):
-        pass
-
-    @abstractmethod
-    def get_num_frames(self) -> int:
-        pass
-
-    @abstractmethod
-    def set_data_names(self, dataset_names: list[str]):
-        pass
-
-    @abstractmethod
-    def has_dataset(self, name) -> bool:
-        pass
-
-    @abstractmethod
-    def read_data(self, start_frame: int, end_frame: int) -> dict[str, NDArray]:
-        pass
-
-
-class HdfDatasource(Datasource):
-    def __init__(self, **reader_options: dict[Any, Any]):
-        super().__init__()
-        self.reader_options: dict[Any, Any] = (
-            reader_options or {}
-        )  # hdf file reader options
-        self.h5_file: File | None = None
-        self.dataset_names: list[str] = []
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.file_path: str = ""
-
-    def configure_source(self, source_path: str):
-        self.file_path = source_path
-
-    def connect(self):
-        if self.h5_file is not None:
-            self.logger.info(
-                f"Closing existing connection to file : {self.h5_file.filename}"
-            )
-            self.close()
-        self.logger.info(f"Connecting to hdf file : {self.file_path}")
-
-        self.h5_file = h5py.File(
-            self.file_path, libver="latest", swmr=True, **self.reader_options
-        )
-
-        self.h5_datasets: dict[str, Dataset] = {}
-        self._setup_datasets()
-
-    def set_data_names(self, dataset_names: list[str]):
-        self.dataset_names = dataset_names
-
-    def is_connected(self) -> bool:
-        return self.h5_file is not None
-
-    def _check_connected(self):
-        if not self.is_connected():
-            raise Exception(
-                "Cannot read from Hdf data source - not connected to any file"
-            )
-
-    def close(self):
-        if self.h5_file is not None:
-            self.logger.info(
-                f"Closing read connection to hdf file {self.h5_file.filename}"
-            )
-            self.h5_file.close()
-            self.h5_file = None
-            self.h5_datasets = {}
-
-    def get_num_frames(self) -> int:
-        self._setup_datasets()
-        if len(self.h5_datasets) == 0:
-            return -1
-
-        lengths = []
-        for dataset in self.h5_datasets.values():
-            dataset.refresh()
-            lengths.append(dataset.shape[0])
-        return min(lengths)
-
-    def has_dataset(self, name):
-        return self.h5_file is not None and name in self.h5_file.keys()
-
-    def _setup_datasets(self):
-        self._check_connected()
-        assert self.h5_file is not None
-        for name in self.dataset_names:
-            # already have the dataset, nothing to do
-            if name in self.h5_datasets:
-                continue
-
-            # check it exists
-            if name not in self.h5_file.keys():
-                raise ValueError(
-                    f"Could not find dataset called {name} in hdf file {self.file_path}"
-                )
-
-            # check it's a Dataset (and not a Group or Datatype)
-            dataset = self.h5_file[name]
-            if type(dataset) is not Dataset:
-                raise ValueError(
-                    f"Cannot read data called '{name}' from {self.file_path} "
-                    "- it is not a Dataset"
-                )
-
-            self.h5_datasets[name] = dataset
-        self.logger.info(f"Datasets for {self.file_path} : {self.dataset_names}")
-
-    def read_data(self, start_frame: int, end_frame: int) -> dict[str, NDArray]:
-        if len(self.dataset_names) == 0:
-            raise ValueError(
-                "Cannot read data - names of datasets to be read "
-                "have not been set using 'set_data_names'"
-            )
-
-        self._setup_datasets()
-        num_frames = end_frame - start_frame
-        data = {}
-        for name in self.dataset_names:
-            dset = self.h5_datasets[name]
-            dset.refresh()
-            dataset = dset[start_frame : end_frame + 1]
-
-            # make sure we have correct number of frames and truncate
-            # elements in outermost dimension if necessary
-            # (sometimes there are more - SWMR flush/readback race condition?)
-            if dataset.shape[0] != num_frames:
-                dataset = dataset[:num_frames]
-
-            data[name] = dataset
-
-        return data
+from .data_sources import Datasource
 
 
 class HdfDataWriter:
@@ -175,7 +26,7 @@ class HdfDataWriter:
     def _open_file(self):
         self.close()
         self.logger.info(f"Opening hdf file {self.file_path}")
-        self.h5_file = h5py.File(
+        self.h5_file = File(
             self.file_path, mode="w", libver="latest", **self.writer_options
         )
 
@@ -304,7 +155,7 @@ class Processor:
             for data_source in self.all_data_sources:
                 data_source.close()
 
-    def _active_data_sources(self):
+    def _active_data_sources(self) -> set[Datasource]:
         return self.datasource_datanames.keys()
 
     def run_processing_loop(self):
@@ -326,10 +177,15 @@ class Processor:
                 source = [s for s in self.all_data_sources if s.has_dataset(data_name)]
 
                 # there must be exactly 1 source for the data
-                if len(source) != 1:
+                if len(source) == 0:
                     raise ValueError(
-                        f"Expected 1 data source for dataset called {data_name} "
-                        f"but found {len(source)} ({source})"
+                        f"Could not find data called '{data_name}' in "
+                        "any of the data sources!"
+                    )
+                if len(source) > 1:
+                    raise ValueError(
+                        f"Expected only 1 source for '{data_name}' data "
+                        f"but found {len(source)} ({source})!"
                     )
                 self.datasource_datanames[source[0]].add(data_name)
 
@@ -376,7 +232,7 @@ class Processor:
         frame_numbers = [
             source.get_num_frames() for source in self._active_data_sources()
         ]
-        print(f"Frames available : {frame_numbers}")
+        self.logger.debug(f"Frames available : {frame_numbers}")
         return min(frame_numbers)
 
     def read_new_frames(self) -> dict[str, NDArray]:
@@ -405,8 +261,19 @@ class Processor:
         for config in self.processing_config:
             # Create list of NDArrays to be used by processing function
             self.logger.info(f"Processing data for {config.output_path}")
-            data = [all_data[name] for name in config.data_names]
 
-            # run the processing function, pass the NDArrays as args.
-            processed_data[config.output_path] = config.function(*data)
+            if (
+                config.output_path is None
+                or config.output_path == ""
+                or len(config.data_names) == 0
+            ):
+                # copy everything
+                processed_data.update(all_data)
+            else:
+                # extract required NDArrays
+                data = [all_data[name] for name in config.data_names]
+                print(f"Data for {config.output_path} : {data}")
+                # run the processing function, pass the NDArrays as args.
+                processed_data[config.output_path] = config.function(*data)
+
         return processed_data

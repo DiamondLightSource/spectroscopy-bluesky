@@ -19,14 +19,15 @@ from spectroscopy_bluesky.common.processing_service import (
     ProcessorOutput,
     ProcessorSetup,
     ProcessorState,
+    SocketDatasource,
 )
 
 
 def log_i0_it(i0, it):
     ratio = i0 / it
-    bad_vals_filter = (ratio >= 0).astype(float)
-    val = np.log(ratio, where=(ratio > 0))
-    return bad_vals_filter * val
+    zeros = np.zeros_like(i0, dtype=float)
+    val = np.log(ratio, where=(ratio > 0), out=zeros)
+    return val
 
 
 def ff_i0(detector_ff, i0):
@@ -119,19 +120,27 @@ def health():
 async def start_processor(setup: ProcessorSetup):
     logging.info(f"start_processor called : {setup}")
 
-    hdf_datasources = []
-    for file in setup.input_files:
-        check_file_exists("Input file", file)
-        datasource = HdfDatasource()
-        datasource.configure_source(file)
-        hdf_datasources.append(datasource)
+    datasources = []
+    for source_name in setup.input_files:
+        if source_name.endswith((".hdf5", ".h5")):
+            # hdf file data source
+            logging.info(f"Making HdfDatasource for : {source_name}")
+            check_file_exists("Input file", source_name)
+            datasource = HdfDatasource()
+            datasource.configure_source(source_name)
+            datasources.append(datasource)
+        else:
+            # panda TCP socket
+            logging.info(f"Making SocketDatasource for : {source_name}")
+            datasource = SocketDatasource(ip_address=source_name)
+            datasources.append(datasource)
 
     hdf_writer = HdfDataWriter(setup.output_file)
 
     processing_config = [to_processing_config(step) for step in setup.processor_outputs]
     logging.info(f"Processing config : {processing_config}")
     processor = Processor(
-        hdf_datasources,
+        datasources,
         processing_config,
         hdf_writer,
         no_new_data_timeout=setup.no_new_data_timeout,
@@ -142,8 +151,9 @@ async def start_processor(setup: ProcessorSetup):
         try:
             await asyncio.to_thread(processor.start_processing)
         except Exception as e:
-            logging.error(f"Processing failed: {e}. "
-                          f"Traceback : {traceback.format_exc()}")
+            logging.error(
+                f"Processing failed: {e}. Traceback : {traceback.format_exc()}"
+            )
 
     timestamp = datetime.now().strftime("%Y-%m-%d %X")
 
