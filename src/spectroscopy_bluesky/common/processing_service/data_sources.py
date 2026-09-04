@@ -1,5 +1,6 @@
 import logging
 import socket
+import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from threading import Thread
@@ -70,7 +71,7 @@ class FrameNumberAndData:
             return self.last_frame()
         return frame_number - self.start_frame
 
-    def _range(self, first_frame, last_frame) -> tuple[int]:
+    def _range(self, first_frame, last_frame) -> tuple:
         if first_frame > self.last_frame():
             return ()
         return self._frame_index_in_data(first_frame), self._frame_index_in_data(
@@ -82,13 +83,20 @@ class FrameNumberAndData:
 
 
 class FrameDataCollection:
+    """Class to store a collection of (:func:`~pandablocks.connections.FrameData`) objects
+    and allow a set of frames to be retrieved 
+
+    * Add frames contained in FrameData object using :func:`~add_data`
+    * Retrieve frames using :func:`get_data`
+
+    """
     def __init__(self):
         self.data_collection: list[FrameNumberAndData] = []
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def get_column_names(self) -> list[str]:
+    def get_column_names(self) -> tuple[str, ...]:
         if len(self.data_collection) == 0:
-            return []
+            return ()
         return self.data_collection[0].frame_data.column_names
 
     def get_num_frames(self) -> int:
@@ -114,24 +122,28 @@ class FrameDataCollection:
         ][-1]
 
     def add_data(self, start_frame: int, frame_data: FrameData):
+        """Add a FrameData object to the data collection
+        Args:
+            start_frame (int): index of first frame in FrameData
+            frame_data (FrameData):
+        """
         self.data_collection.append(FrameNumberAndData(start_frame, frame_data))
 
-    def convert_to_dict(self, structured_ndarray: NDArray) -> dict[str, NDArray]:
+    def _convert_to_dict(self, structured_ndarray: NDArray) -> dict[str, NDArray]:
         return {name: structured_ndarray[name] for name in self.get_column_names()}
 
     # Return frames of data
     def get_data(self, start_frame: int, end_frame: int) -> dict[str, NDArray]:
-        """Return numpy array of frames of data
-        (frame range is excludes final specified frame)
+        """Return numpy arrays containing several frames of data
+        (frame range excludes final specified frame)
 
         Args:
             start_frame (int):
             end_frame (int):
 
         Returns:
-            dict[str, NDArray]: Numpy array containing (end_frame-start_frame + 1) frames
-                of data for all available data fields
-
+            dict[str, NDArray]: Numpy array containing (end_frame-start_frame + 1)
+                frames of data for all available data fields
         """
         # Find indices in data_collection that contain start and end frame
         start_index = self._find_frame_location(start_frame)
@@ -143,7 +155,7 @@ class FrameDataCollection:
             framedata = self.data_collection[start_index].get_frames(
                 start_frame, end_frame
             )
-            return self.convert_to_dict(framedata)
+            return self._convert_to_dict(framedata)
 
         # Frame range spans multiple FrameNumberAndDatas :
 
@@ -166,7 +178,7 @@ class FrameDataCollection:
 
         # Convert from structured array to dict
         # NB: NDArrays in the dict are views into the original data, not copies
-        return self.convert_to_dict(data)
+        return self._convert_to_dict(data)
 
 
 class SocketDatasource(Datasource):
@@ -174,8 +186,8 @@ class SocketDatasource(Datasource):
         self.ip_address = ip_address
         self.data_port = data_port
         self.scaled_data = False
-        self.collected_data: FrameDataCollection | None = None
-        self.data_names = []  # Names of all the data captured in the stream (from stram header)
+        self.collected_data = FrameDataCollection()
+        self.data_names = []  # Names of all the data captured (from stream header)
         self.poll_interval_secs: float = 0.1
         self.collection_finished = False
         self.collection_running = False
@@ -206,15 +218,10 @@ class SocketDatasource(Datasource):
         return self._tcp_socket is not None
 
     def close(self):
-        if self.is_connected():
+        if self._tcp_socket is not None:
             self._tcp_socket.close()
 
     def collect_in_thread(self):
-        if self.collection_running:
-            raise Exception(
-                "Cannot run 'collect_data' collection again - it is already running"
-            )
-
         self._collection_thread = Thread(target=self.collect_data)
         self._collection_thread.start()
         self.logger.info("Waiting for data names to be read from stream")
@@ -224,7 +231,7 @@ class SocketDatasource(Datasource):
 
     def collect_data(self):
         if self.collection_running:
-            raise Exception(
+            raise RuntimeError(
                 "Cannot run 'collect_data' collection again - it is already running"
             )
 
@@ -237,6 +244,9 @@ class SocketDatasource(Datasource):
         self.collection_running = False
 
     def _run_data_collection_loop(self):
+        if self._tcp_socket is None or self._data_connection is None:
+            raise RuntimeError(f"Cannot collect data - 'connect' has not been called "
+                               f"on SocketDatasource for {self.ip_address}")
 
         self.collection_running = True
         self.collection_finished = False
@@ -253,10 +263,11 @@ class SocketDatasource(Datasource):
             ):
                 dtype = type(data)
                 if dtype is FrameData:
-                    self.collected_data.add_data(start_frame, data)
-                    start_frame += data.data.shape[0]
+                    fdata = typing.cast(FrameData, data)
+                    self.collected_data.add_data(start_frame, fdata)
+                    start_frame += fdata.data.shape[0]
                 elif dtype is StartData:
-                    self.extract_data_names(data)
+                    self.extract_data_names(typing.cast(StartData,data))
                 elif dtype is EndData:
                     self.logger.info("Collection finished")
                     self.collection_finished = True
@@ -406,30 +417,33 @@ class HdfDatasource(Datasource):
 def test_frame_data_collection():
     fdc = FrameDataCollection()
     num_frames = 5
-    shape = (num_frames, 3)
+    shape = (num_frames, 1)
     num_datasets = 10
-    orig_datasets = []
+    orig_datasets: list[NDArray] = []
+    data_name = "COUNTER1.OUT.Value"
     for i in range(0, num_datasets):
-        data = np.random.random(shape) * (i + 1)
+        # make array of random numbers, set the data name and type
+        data = np.random.random(shape).astype(dtype=[(data_name, "<f8")])
         orig_datasets.append(data)
         fdc.add_data(i * shape[0], FrameData(data))
 
+    # check number of frames across all datasets is correct
     assert fdc.get_num_frames() == shape[0] * num_datasets
 
     # test we can extract original datasets
     for i in range(0, num_datasets):
-        orig = orig_datasets[i]
-        arr2 = fdc.get_data(i * num_frames, (i + 1) * num_frames - 1)
+        orig = orig_datasets[i][data_name]
+        arr2 = fdc.get_data(i * num_frames, (i + 1) * num_frames)[data_name]
         assert np.array_equal(orig, arr2), (
             f"Extracted array :\n {arr2}\n is not same as original :\n{orig}!"
         )
 
-    # test we can extract across 2 datasets
+    # test we can extract frames across 2 datasets
     for i in range(0, num_datasets, 2):
-        orig = np.concat([orig_datasets[i], orig_datasets[i + 1]])
+        orig = np.concat([orig_datasets[i], orig_datasets[i + 1]])[data_name]
         start_frame = i * num_frames
         end_frame = start_frame + 2 * num_frames
-        arr2 = fdc.get_data(start_frame, end_frame - 1)
+        arr2 = fdc.get_data(start_frame, end_frame)[data_name]
         assert np.array_equal(orig, arr2), (
             f"Extracted array :\n {arr2}\n is not same as original :\n{orig}!"
         )

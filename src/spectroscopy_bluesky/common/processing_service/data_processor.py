@@ -155,8 +155,8 @@ class Processor:
             for data_source in self.all_data_sources:
                 data_source.close()
 
-    def _active_data_sources(self) -> set[Datasource]:
-        return self.datasource_datanames.keys()
+    def _active_data_sources(self) -> list[Datasource]:
+        return list(self.datasource_datanames.keys())
 
     def run_processing_loop(self):
 
