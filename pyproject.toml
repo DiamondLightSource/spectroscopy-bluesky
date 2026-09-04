@@ -26,6 +26,7 @@ dependencies = [
     "typer",
     "h5py",
     "xraydb",
+    "requests"
 ]
 
 dynamic = ["version"]
