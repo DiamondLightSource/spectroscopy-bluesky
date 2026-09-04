@@ -83,13 +83,14 @@ class FrameNumberAndData:
 
 
 class FrameDataCollection:
-    """Class to store a collection of (:func:`~pandablocks.connections.FrameData`) objects
-    and allow a set of frames to be retrieved 
+    """Class to store a collection of (:func:`~pandablocks.connections.FrameData`)
+    objects and allow a set of frames to be retrieved
 
     * Add frames contained in FrameData object using :func:`~add_data`
     * Retrieve frames using :func:`get_data`
 
     """
+
     def __init__(self):
         self.data_collection: list[FrameNumberAndData] = []
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -245,8 +246,10 @@ class SocketDatasource(Datasource):
 
     def _run_data_collection_loop(self):
         if self._tcp_socket is None or self._data_connection is None:
-            raise RuntimeError(f"Cannot collect data - 'connect' has not been called "
-                               f"on SocketDatasource for {self.ip_address}")
+            raise RuntimeError(
+                f"Cannot collect data - 'connect' has not been called "
+                f"on SocketDatasource for {self.ip_address}"
+            )
 
         self.collection_running = True
         self.collection_finished = False
@@ -267,7 +270,7 @@ class SocketDatasource(Datasource):
                     self.collected_data.add_data(start_frame, fdata)
                     start_frame += fdata.data.shape[0]
                 elif dtype is StartData:
-                    self.extract_data_names(typing.cast(StartData,data))
+                    self.extract_data_names(typing.cast(StartData, data))
                 elif dtype is EndData:
                     self.logger.info("Collection finished")
                     self.collection_finished = True
