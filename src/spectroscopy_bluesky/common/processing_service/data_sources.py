@@ -193,8 +193,9 @@ class SocketDatasource(Datasource):
         self.collection_finished = False
         self.collection_running = False
         self.socket_max_readsize_kb = 10 * 1024
-        self._tcp_socket: socket.socket | None = None
-        self._data_connection: DataConnection | None = None
+        self._tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._data_connection = DataConnection()
+        self._socket_connected = False
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def configure_source(self, source_path: str):
@@ -206,21 +207,19 @@ class SocketDatasource(Datasource):
             f"Connecting to Panda TCP socket : ip address = {self.ip_address}, "
             f"port = {self.data_port}"
         )
-        self._tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._tcp_socket.connect((self.ip_address, self.data_port))
-
-        self._data_connection = DataConnection()
+        self._socket_connected = True
         connection_commands = self._data_connection.connect(self.scaled_data)
         self._tcp_socket.sendall(connection_commands)
         ## need to make sure the data names are available immediately after connection
         self.collect_in_thread()
 
     def is_connected(self) -> bool:
-        return self._tcp_socket is not None
+        return self._socket_connected
 
     def close(self):
-        if self._tcp_socket is not None:
-            self._tcp_socket.close()
+        self._tcp_socket.close()
+        self._socket_connected = False
 
     def collect_in_thread(self):
         self._collection_thread = Thread(target=self.collect_data)
@@ -245,7 +244,7 @@ class SocketDatasource(Datasource):
         self.collection_running = False
 
     def _run_data_collection_loop(self):
-        if self._tcp_socket is None or self._data_connection is None:
+        if not self._socket_connected:
             raise RuntimeError(
                 f"Cannot collect data - 'connect' has not been called "
                 f"on SocketDatasource for {self.ip_address}"
