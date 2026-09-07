@@ -52,7 +52,7 @@ def setup_trajectory_scan_pvs(prefix: str = "BL51P-MO-STEP-06"):
 
 from dodal.common.coordination import inject
 def restore_panda_settings(
-    panda: HDFPanda = inject("panda1"),  # noqa: B008
+    panda: HDFPanda = inject("panda2"),  # noqa: B008
     restore_settings: bool = False,
     restore_dataset_settings: bool = False,
     store_settings: bool = False,

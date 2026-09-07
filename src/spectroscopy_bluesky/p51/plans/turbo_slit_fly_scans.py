@@ -302,7 +302,7 @@ def fly_sweep_both_ways(
 def trajectory_fly_scan(
     start: float,
     stop: float,
-    num: int,
+    num_readouts: int,
     duration: float,
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
@@ -315,7 +315,7 @@ def trajectory_fly_scan(
 
     yield from setup_trajectory_scan_pvs()
 
-    spec = Fly(float(duration) @ (Line(motor, start, stop, num)))
+    spec = Fly(float(duration) @ (Line(motor, start, stop, num_readouts)))
 
     trigger_logic = spec
     pmac_trajectory_flyer = PmacTrajectoryTriggerLogic(pmac)
@@ -323,7 +323,7 @@ def trajectory_fly_scan(
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
     def inner_plan():
-        width, _, _, direction_of_sweep = calculate_stuff(start, stop, num)
+        width, _, _, direction_of_sweep = calculate_stuff(start, stop, num_readouts)
 
         dir1 = direction_of_sweep
         dir2 = (
@@ -332,11 +332,11 @@ def trajectory_fly_scan(
             else PandaPcompDirection.NEGATIVE
         )
 
-        pcomp_info1 = get_pcomp_info(width, start, dir1, num)
-        pcomp_info2 = get_pcomp_info(width, stop, dir2, num)
+        pcomp_info1 = get_pcomp_info(width, start, dir1, num_readouts)
+        pcomp_info2 = get_pcomp_info(width, stop, dir2, num_readouts)
 
         panda_hdf_info = TriggerInfo(
-            number_of_events=num,
+            number_of_events=num_readouts,
             trigger=DetectorTrigger.EXTERNAL_LEVEL,
             livetime=duration,
             deadtime=1e-5,

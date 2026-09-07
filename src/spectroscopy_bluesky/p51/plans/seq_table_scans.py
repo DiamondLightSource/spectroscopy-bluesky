@@ -34,13 +34,19 @@ from ophyd_async.fastcs.panda import (
     SeqTableInfo,
     StaticSeqTableTriggerLogic,
 )
-
-from bluesky.preprocessors import subs_decorator, stub_decorator
-from ophyd_async.plan_stubs import ensure_connected
 from ophyd_async.epics.core import epics_signal_r
+from ophyd_async.plan_stubs import ensure_connected
 from scanspec.specs import Fly, Line
 from collections.abc import Callable
 
+from spectroscopy_bluesky.common.xas_scans import (
+    XasScanParameters,
+    XasScanPointGenerator,
+)
+from bluesky.preprocessors import (
+    subs_decorator, 
+    stub_decorator,
+)
 from spectroscopy_bluesky.common.quantity_conversion import (
     si_111_lattice_spacing,
     energy_to_bragg_angle,
@@ -49,11 +55,7 @@ from spectroscopy_bluesky.common.quantity_conversion import (
 from spectroscopy_bluesky.p51.plans.sequence_table import (
     SeqTableBuilder,
     SpectrumBasedTrigger,
-)
-
-from spectroscopy_bluesky.common.xas_scans import (
-    XasScanParameters,
-    XasScanPointGenerator,
+    SpectrumTriggerType,
 )
 
 from .common import (
@@ -65,18 +67,58 @@ from typing import cast
 
 from bluesky.callbacks.core import CollectThenCompute
 
+# output_ports, pulse_width, output_delay, num_repeats, type, trigger_repeat
+TriggerSpec = tuple[list[int], float, float, int, int, int]
+
+
+def generate_triggers(
+    triggers: list[TriggerSpec],
+) -> list[SpectrumBasedTrigger]:
+    spectrum_triggers = []
+    for (
+        output_ports,
+        pulse_width,
+        output_delay,
+        output_num_repeats,
+        trigger_type,
+        trigger_repeat,
+    ) in triggers:
+        for _ in range(trigger_repeat):
+            spectrum_triggers.append(
+                SpectrumBasedTrigger(
+                    spectrum_number=1,
+                    trigger_type=SpectrumTriggerType(trigger_type),
+                    output_ports=output_ports,
+                    output_length=pulse_width,
+                    output_delay=output_delay,
+                    output_num_repeats=output_num_repeats,
+                )
+            )
+
+    return spectrum_triggers
+
+
 LOGGER = logging.getLogger(__name__)
 
+
+from bluesky.callbacks.core import CollectThenCompute
+from typing import cast
 
 class ProcessData(CollectThenCompute):
     def __init__(self):
         super().__init__()
         self.processed_signal = Callable[[SignalRW], None]
         self.processed_signal_name = ""
+        # PV configuration
+        self.pv_min_threshold = 0
+        self.pv_max_threshold = 0
         self.in_range = False
-        self.min_threshold = 1
-        self.max_threshold = 40
+        self.pv_ensure_in_range = False
+        # SNR calculations
         self.snr_db = 0
+        self.pv_snr_min_threshold  = 0
+        self.snr_in_range = False
+        self.pv_compute_snr = False
 
     def start(self, doc):
         self.results = []
@@ -87,11 +129,14 @@ class ProcessData(CollectThenCompute):
     def event(self, doc):
         # print(f"event received{doc}")
         # Check threshold hasnt been breached
-        # value = doc["data"]["motor_readback"]
-        # if value > self.min_threshold or value < self.max_threshold 
-        #     self.in_range = True
-        # else:
-        #     self.in_range = False
+        if self.pv_ensure_in_range and self.processed_signal_name in doc["data"]:
+            value = doc["data"][self.processed_signal_name]
+            # print(f"event received{doc}")
+            # print(value)
+            if value > self.pv_min_threshold and value <= self.pv_max_threshold:
+                self.in_range = True
+            else:
+                self.in_range = False
         super().event(doc)
 
 
@@ -129,40 +174,39 @@ class ProcessData(CollectThenCompute):
 
     def compute(self):
         """This method is called at run-stop time by the superclass."""
-        # self.snr_db = self.snr_db + 8
 
-        val, timestamp = self.extract_data("diode_readback")
+        if self.pv_compute_snr:
+            val, timestamp = self.extract_data(self.processed_signal_name)
+            print(f"starting the scan analysis of {self.processed_signal_name}")
 
-        print("starting the scan analysis")
+            from scipy.ndimage import gaussian_filter1d
+            from scipy.signal import find_peaks
 
-        from scipy.ndimage import gaussian_filter1d
-        from scipy.signal import find_peaks
+            filtered_data = gaussian_filter1d(val, sigma=2)
 
-        filtered_data = gaussian_filter1d(val, sigma=2)
+            peaks, props = find_peaks(
+                filtered_data,
+                prominence=1.0,
+                distance=10
+            )
 
-        peaks, props = find_peaks(
-            filtered_data,
-            prominence=1.0,
-            distance=10
-        )
+            # Residual noise
+            noise = np.array(val) - filtered_data
 
-        # Residual noise
-        noise = np.array(val) - filtered_data
+            # SNR calculation
+            signal_rms = np.sqrt(np.sum(filtered_data**2))
+            noise_rms = np.sqrt(np.sum(noise**2))
 
-        # SNR calculation
-        signal_rms = np.sqrt(np.sum(filtered_data**2))
-        noise_rms = np.sqrt(np.sum(noise**2))
+            # self.snr_db = 20 * np.log10(signal_rms / noise_rms)
+            self.snr_db += 10
 
-        self.snr_db = 20 * np.log10(signal_rms / noise_rms)
-
-        print("Signal RMS =", signal_rms)
-        print("Noise RMS =", noise_rms)
-        print("SNR =", self.snr_db, "dB")
+            print("Signal RMS =", signal_rms)
+            print("Noise RMS =", noise_rms)
+            print("SNR =", self.snr_db, "dB")
 
         # filtered_data = self.filter_average("motor_readback", 2)
         # self.plot_data(val, timestamp, "before_filter")
         # self.plot_data(filtered_data, timestamp, "after_filter")
-        # # self.processed_signal.set(10)  # pyright: ignore
 
 
 def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
@@ -229,18 +273,15 @@ def prepare_pv_monitoring(readable_pvs: dict[str, Any]) -> MsgGenerator:
         except Exception as e:
             raise RuntimeError(f"Failed to connect PV '{pv_name}'") from e
         
-        # if pv_config["monitor_pv_threshold"]:
-        monitor_pv_threshold = True
-        if monitor_pv_threshold:
-            print("recorded")
-            pv_callback = ProcessData()
-            pv_callback.processed_signal = pv_signal 
-            pv_callback.processed_signal_name = pv_name
-            # pv_callback.min_threshold = int(pv_config["min_threshold"])
-            # pv_callback.max_threshold = int(pv_config["max_threshold"])
-            pv_callback.min_threshold = 30
-            pv_callback.max_threshold = 40
-            pvCallbacks.append(pv_callback)
+        pv_callback = ProcessData()
+        pv_callback.processed_signal = pv_signal 
+        pv_callback.processed_signal_name = pv_name
+        pv_callback.pv_min_threshold = pv_config["pv_min_threshold"]
+        pv_callback.pv_max_threshold = pv_config["pv_max_threshold"]
+        pv_callback.pv_compute_snr = pv_config["pv_compute_snr"].lower() == "true" if isinstance(pv_config["pv_compute_snr"], str) else pv_config["pv_compute_snr"]
+        pv_callback.pv_snr_min_threshold = pv_config["pv_snr_min_threshold"]
+        pv_callback.pv_ensure_in_range = pv_config["pv_ensure_in_range"].lower() == "true" if isinstance(pv_config["pv_ensure_in_range"], str) else pv_config["pv_ensure_in_range"]
+        pvCallbacks.append(pv_callback)
 
     return pvCallbacks
 
@@ -346,17 +387,26 @@ def seq_table_energy_scan(
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008,
     number_of_sweeps: int = 1,
+    variable_exafs_time: bool = False,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
     readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
+    prescale_as_us = 1
     # Generate triggers
     params = XasScanParameters(element, edge)
     params.set_from_element_edge()
     params.set_abc_from_gaf()
-    # params.exafsTimeType = "constant time"
+    if variable_exafs_time:
+        params.exafsTimeType = "variable time"
+        prescale_as_us = 10
     gen = XasScanPointGenerator(params)
     grid = gen.calculate_energy_time_grid()
     angle = energy_to_bragg_angle(si_111_lattice_spacing, grid[:, 0])
+    capture_time = None
+    if variable_exafs_time:
+        capture_time = grid[:, 1] * prescale_as_us
 
     scan_params_dict = {
         "scan_name": "seq_table_energy_scan",
@@ -374,6 +424,7 @@ def seq_table_energy_scan(
         motor,
         panda,
         num_trajectory_points=len(angle),
+        capture_time=capture_time,
         number_of_sweeps=number_of_sweeps,
         scan_params_dict=scan_params_dict,
     )
@@ -388,16 +439,19 @@ def seq_table_two_panda_scan(
     panda: HDFPanda = inject("panda1"),  # noqa: B008,
     panda2: HDFPanda = inject("panda2"),  # noqa: B008,
     num_trajectory_points: int = 10,
-    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    triggers: list[TriggerSpec] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     readable_pvs: dict[str, Any] | None = None,
+    ramp_time: float | None = None,
+    turnaround_time: float | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
     # setup a second seq table for 'spectrum based' triggering
     panda_dict = {}
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
-    if spectrum_triggers is not None:
+    if triggers is not None:
+        spectrum_triggers = generate_triggers(triggers)
         seq_table = (
             SeqTableBuilder()
             .add_spectrum_based_triggers(spectrum_triggers)
@@ -415,8 +469,8 @@ def seq_table_two_panda_scan(
     scan_params_dict = {
         "scan_name": "seq_table_two_panda_scan",
         "spectrum_triggers": spectrum_triggers,
-        "readable_pvs": readable_pvs,
         "metadata": metadata,
+        "readable_pvs": readable_pvs,
     }
 
     yield from seq_table_position_scan(
@@ -431,9 +485,11 @@ def seq_table_two_panda_scan(
         number_of_sweeps=number_of_sweeps,
         panda_dict=panda_dict,
         scan_params_dict=scan_params_dict,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
+        metadata=metadata,
     )
-
-
+      
 def seq_table_uniform_scan(
     start: float,
     stop: float,
@@ -442,7 +498,7 @@ def seq_table_uniform_scan(
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008,
     num_trajectory_points: int = 10,
-    spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
+    spectrum_triggers: list[TriggerSpec] | None = None,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     ramp_time: float | None = None,
@@ -452,169 +508,184 @@ def seq_table_uniform_scan(
     metadata: dict[str, Any] | None = None,
 ) -> MsgGenerator:
 
-    yield from bps.checkpoint()
-    
-    pv_callbacks = []
+    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
+    # print(capture_positions)
 
-    if readable_pvs is not None:
-        pv_callbacks = yield from prepare_pv_monitoring(readable_pvs)
-        print (f"pv_Calback1 is {pv_callbacks}")
-        n = 0
-        for pvs in pv_callbacks:
-            while True: 
-                if pvs.snr_db < pvs.min_threshold or pvs.snr_db > pvs.max_threshold :
-                    print("snr not in range")
-                    capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
-                    print(capture_positions)
-                    n=n+1
-                    stream_name = f"primary{n}"
-                    # setup a second seq table for 'spectrum based' triggering :
-                    if panda_dict is None:
-                        panda_dict = {}
-                    if spectrum_triggers is not None:
-                        seq_table = (
-                            SeqTableBuilder()
-                            .add_spectrum_based_triggers(spectrum_triggers)
-                            .get_seq_table()
-                        )
+    # setup a second seq table for 'spectrum based' triggering :
+    if spectrum_triggers is not None:
+        # initialise if nothing has been passed in
+        if panda_dict is None:
+            panda_dict = {}
 
-                        prepare_triggers_seqtable = prepare_seq_table(
-                            panda, seq_table, 2, prepare_panda=False
-                        )
-                        panda_dict[panda] = [prepare_triggers_seqtable]
-
-                    scan_params_dict = {
-                        "scan_name": "seq_table_uniform_scan",
-                        "stepsize": stepsize,
-                        "spectrum_triggers": spectrum_triggers,
-                        "readable_pvs": readable_pvs,
-                        "metadata": metadata,
-                        "pv_callback": pv_callbacks,
-                        "stream_name": stream_name,
-                    }
- 
-                    yield from seq_table_position_scan(
-                        start,
-                        stop,
-                        time_per_sweep,
-                        capture_positions,
-                        motor=motor,
-                        panda=panda,
-                        num_trajectory_points=num_trajectory_points,
-                        add_sweep_triggers=add_sweep_triggers,
-                        number_of_sweeps=number_of_sweeps,
-                        ramp_time=ramp_time,
-                        turnaround_time=turnaround_time,
-                        panda_dict=panda_dict,
-                        scan_params_dict=scan_params_dict,
-                    )
-                    stepsize = stepsize*2
-                    time_per_sweep = time_per_sweep + 1
-                else:
-                    print("snr is now in_range")
-                    # yield from bps.deferred_pause()
-                    break
-    else:   
-        capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
-        yield from seq_table_position_scan(
-            start,
-            stop,
-            time_per_sweep,
-            capture_positions,
-            motor=motor,
-            panda=panda,
-            num_trajectory_points=num_trajectory_points,
-            add_sweep_triggers=add_sweep_triggers,
-            number_of_sweeps=number_of_sweeps,
-            ramp_time=ramp_time,
-            turnaround_time=turnaround_time,
-            panda_dict=panda_dict,
-            scan_params_dict=scan_params_dict, 
+        spectrumTriggers = generate_triggers(spectrum_triggers)
+        seq_table = (
+            SeqTableBuilder()
+            .add_spectrum_based_triggers(spectrumTriggers)
+            .get_seq_table()
         )
 
+        prepare_triggers_seqtable = prepare_seq_table(
+            panda, seq_table, 2, prepare_panda=False
+        )
+        panda_dict[panda] = [prepare_triggers_seqtable]
+
+    scan_params_dict = {
+        "scan_name": "seq_table_uniform_scan",
+        "stepsize": stepsize,
+        "spectrum_triggers": spectrum_triggers,
+        "readable_pvs": readable_pvs,
+        "metadata": metadata,
+    }
+
+    yield from seq_table_position_scan(
+        start,
+        stop,
+        time_per_sweep,
+        capture_positions,
+        motor=motor,
+        panda=panda,
+        num_trajectory_points=num_trajectory_points,
+        add_sweep_triggers=add_sweep_triggers,
+        number_of_sweeps=number_of_sweeps,
+        ramp_time=ramp_time,
+        turnaround_time=turnaround_time,
+        panda_dict=panda_dict,
+        scan_params_dict=scan_params_dict,
+    )
 
 def seq_table_position_scan(
     start: float,
     stop: float,
     time_per_sweep: float,
     capture_positions: NDArray,
-    motor: Motor,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
     num_trajectory_points: int = 10,
     add_sweep_triggers: bool = False,
     number_of_sweeps: int = 4,
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
+    capture_time: list[float] | None = None,
+    prescale_as_us: float = 1,
+    scan_spec: Fly | None = None,
     **kwargs: Any,
 ) -> MsgGenerator:
 
-    time_per_traj_point = time_per_sweep / num_trajectory_points
-
-    print(
-        f"Num trajectorypoints : {num_trajectory_points}, "
-        f"time per traj point : {time_per_traj_point}",
-        f"step: {len(capture_positions)}"
-    )
-
-    # Prepare motor info using trajectory scanning
-    spec = Fly(
-        time_per_traj_point
-        @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
-    )
-
-    # add points to capture positions on the reverse sweep
-    if number_of_sweeps > 1:
-        num_captures = capture_positions.size
-        positions = np.zeros(2 * num_captures)
-        positions[0:num_captures] = capture_positions
-        positions[num_captures : num_captures * 2] = np.flip(capture_positions)
-    else:
-        positions = capture_positions
-
-    num_seqtable_repeats = 1
-    if number_of_sweeps > 1:
-        num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
-
-    # Sequence table has position triggers for one back-and-forth sweep.
-    # Use multiple repetitions of seq table to capture subsequent sweeps.
-    seqTable_builder = SeqTableBuilder()
-    seqTable_builder.convert_to_encoder = get_encoder_counts
-    seqTable_builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
-    if add_sweep_triggers:
-        seqTable_builder.add_start_end_triggers("outb1", "outc1")
-
+    pv_callback = []
     # initialise if nothing has been passed in
     if panda_dict is None:
         panda_dict = {}
 
-    prepare_position_seqtable = prepare_seq_table(
-        panda, seqTable_builder.get_seq_table(), 1, num_seqtable_repeats
-    )
-    # append position sequence table setup to panda entry (make empty list first
-    # if not already present).
-    panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
+    def configure_scan_parameters(
+        n: int | None = None
+    ):  
+        time_per_traj_point = time_per_sweep / num_trajectory_points
 
-    if kwargs.get("scan_params_dict") is None:
-        kwargs["scan_params_dict"] = {}
-        kwargs["scan_params_dict"]["scan_name"] = "seq_table_position_scan"
+        print(
+            f"Num trajectorypoints : {num_trajectory_points}, "
+            f"time per traj point : {time_per_traj_point}",
+            f"step: {len(capture_positions)}"
+        )
+        scan_spec = Fly(
+            time_per_traj_point
+            @ (number_of_sweeps * ~Line(motor, start, stop, num_trajectory_points))
+        )
 
-    kwargs["scan_params_dict"].update(
-        {
-            "start": start,
-            "stop": stop,
-            "time_per_sweep": time_per_sweep,
-            "capture_positions": capture_positions,
-            "motor": motor,
-            "panda": panda,
-            "num_trajectory_points": num_trajectory_points,
-            "add_sweep_triggers": add_sweep_triggers,
-            "number_of_sweeps": number_of_sweeps,
-            "time_per_traj_point": time_per_traj_point,
-            "num_seqtable_repeats": num_seqtable_repeats,
-        }
-    )
-    yield from seq_table_scan(spec, panda_dict, motor=motor, **kwargs)
+        # add points to capture positions on the reverse sweep
+        if number_of_sweeps > 1:
+            num_captures = capture_positions.size
+            positions = np.zeros(2 * num_captures)
+            positions[0:num_captures] = capture_positions
+            positions[num_captures : num_captures * 2] = np.flip(capture_positions)
+            time = np.zeros(2 * num_captures)
+            if capture_time is not None:
+                time[0:num_captures] = capture_time
+                time[num_captures : num_captures * 2] = np.flip(capture_time)
+        else:
+            positions = capture_positions
+            time = capture_time
 
-from bluesky.plans import adaptive_scan
+        num_seqtable_repeats = 1
+        if number_of_sweeps > 1:
+            num_seqtable_repeats = mt.ceil(number_of_sweeps / 2)
+
+        # Sequence table has position triggers for one back-and-forth sweep.
+        # Use multiple repetitions of seq table to capture subsequent sweeps.
+        seqTable_builder = SeqTableBuilder()
+        seqTable_builder.convert_to_encoder = get_encoder_counts
+        if capture_time is None:
+            seqTable_builder.add_positions(
+                positions, time1=1, outa1=True, time2=1, outa2=False
+            )
+        else:
+            seqTable_builder.add_variable_positions(
+                positions, time=time, outa1=True, outa2=False
+            )
+        if add_sweep_triggers:
+            seqTable_builder.add_start_end_triggers("outb1", "outc1")
+
+
+        prepare_position_seqtable = prepare_seq_table(
+            panda,
+            seqTable_builder.get_seq_table(),
+            1,
+            num_seqtable_repeats,
+            prescale_as_us=prescale_as_us,
+        )
+        # append position sequence table setup to panda entry (make empty list first
+        # if not already present).
+        panda_dict.setdefault(panda, []).append(prepare_position_seqtable)
+
+        if kwargs.get("scan_params_dict") is None:
+            kwargs["scan_params_dict"] = {}
+            kwargs["scan_params_dict"]["scan_name"] = "seq_table_position_scan"
+
+        stream_name = f"primary{n}"
+        kwargs["scan_params_dict"].update(
+            {
+                "start": start,
+                "stop": stop,
+                "time_per_sweep": time_per_sweep,
+                "capture_positions": capture_positions,
+                "motor": motor,
+                "panda": panda,
+                "num_trajectory_points": num_trajectory_points,
+                "add_sweep_triggers": add_sweep_triggers,
+                "number_of_sweeps": number_of_sweeps,
+                "time_per_traj_point": time_per_traj_point,
+                "num_seqtable_repeats": num_seqtable_repeats,
+                "pv_callback":pv_callback,
+                "stream_name":stream_name,
+            }
+        )
+        yield from seq_table_scan(scan_spec, panda_dict, motor=motor, **kwargs)
+
+    scan_parameters = kwargs.get("scan_params_dict") or {}
+    readable_pvs = scan_parameters.get("readable_pvs") or {}
+
+    if readable_pvs is not None:
+        pv_callback = yield from prepare_pv_monitoring(readable_pvs)
+        n = 0
+        
+        if not any(pvs.pv_compute_snr for pvs in pv_callback):
+            print("Not an adaptive scan")
+            yield from configure_scan_parameters(n) 
+        else:
+            yield from bps.checkpoint()
+            while all(pvs.snr_db <= pvs.pv_snr_min_threshold for pvs in pv_callback if pvs.pv_compute_snr):
+                print("Adaptive Scan: snr is not in range")
+                yield from configure_scan_parameters(n) 
+                n += 1
+                time_per_sweep += 1
+                # stepsize = stepsize*2
+                if not all(pvs.in_range for pvs in pv_callback if pvs.pv_ensure_in_range):
+                    print("Scan parameters not in range")
+                    yield from bps.deferred_pause()
+                    break    
+    else:
+        print ("Not monitoring PVs")
+        yield from configure_scan_parameters() 
+
+
 def seq_table_scan(
     scan_spec: Fly,
     panda_dict: dict[
@@ -642,10 +713,8 @@ def seq_table_scan(
 
     scan_parameters = kwargs.get("scan_params_dict") or {}
     scan_name = scan_parameters.get("scan_name")
-    pv_callback = scan_parameters.get("pv_callback")
+    pv_callback = scan_parameters.get("pv_callback") or {}
     stream_name = scan_parameters.get("stream_name")
-    print(f"pv callback is {pv_callback}")
-    print(f"stream name is {stream_name}")
 
     _md = {
         "plan_args": {
@@ -714,22 +783,12 @@ def seq_table_scan(
 
     @stub_decorator()
     def inner_squared_plan():
-        # print("running adaptive scan")
-        # _md_ = {"user_info": "adaptive scan using bluesky"}
-        # yield from bp.adaptive_scan(
-        #     [*detectors], 
-        #     'inenc-1-val_dataset', 
-        #     motor,
-        #     start=-15,
-        #     stop=10,
-        #     min_step=0.01,
-        #     max_step=5,
-        #     target_delta=.05,
-        #     backstep=True,
-        #     threshold = 10,
-        #     md=_md_
-        # )
-        yield from bp.count([motor], 20)
+        for pvs in pv_callback:
+            if pvs.pv_ensure_in_range:
+                yield from bps.monitor(pvs.processed_signal, name=pvs.processed_signal_name) 
+        while not all(pvs.in_range for pvs in pv_callback if pvs.pv_ensure_in_range):
+            yield from bps.sleep(0.1)
+        yield from bp.count([motor], 20)    
 
     @stub_decorator()
     def inner_plan():
@@ -740,21 +799,23 @@ def seq_table_scan(
             for prepare in preparer_funcs:
                 yield from prepare()
 
-        yield from bps.declare_stream(*detectors, name="primary", collect=True)
+        yield from bps.declare_stream(*detectors, name = stream_name, collect=True)
 
         for panda in detectors:
             yield from bps.kickoff(panda)
 
         # Prepare pmac with the trajectory
         yield from bps.kickoff(pmac_trajectory_flyer, wait=True)
-        
+
+        # Monitor the rest of the PVs         
         for pvs in pv_callback:
-            yield from bps.monitor(pvs.processed_signal, name=pvs.processed_signal_name)
+            if not pvs.pv_ensure_in_range:
+                yield from bps.monitor(pvs.processed_signal, name=pvs.processed_signal_name)   
 
         yield from bps.collect_while_completing(
             flyers=[pmac_trajectory_flyer],
             dets=[*detectors],
-            stream_name="primary",
+            stream_name= stream_name,
             flush_period=0.5,
         )
 
@@ -762,11 +823,14 @@ def seq_table_scan(
     @bpp.stage_decorator([*detectors])
     @bpp.run_decorator(md=_md)
     def combined_plan():
+        from datetime import datetime
 
+        current_time = datetime.now().strftime("%H:%M:%S")
+        print("Current time:", current_time)
+        yield from inner_squared_plan()
         yield from inner_plan()
 
         # yield from inner_plan()
-        # yield from inner_squared_plan()
         # yield from append_processed_data()
         # yield from retrieve_tiled_data()
 

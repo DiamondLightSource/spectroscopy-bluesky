@@ -16,7 +16,9 @@ from spectroscopy_bluesky.p51.plans import (
     seq_table_two_panda_scan,
     seq_table_uniform_scan,
     restore_panda_settings, 
+    trajectory_fly_scan,
 )
+
 from spectroscopy_bluesky.p51.plans.sequence_table import (
     SpectrumBasedTrigger,
     SpectrumTriggerType,
@@ -70,65 +72,65 @@ def two_seq_tables_plan() -> MsgGenerator:
     # yield from setup_seq_table_spectrum_triggers(panda_triggers, p, 2)
 
     readable_pvs = {
-        # "motor_readback": {
-        #     "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.RBV  ",
-        #     "pv_datatype": "float",
-        # },
+        "motor_readback": {
+            "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.RBV",
+            "pv_datatype": "float",
+            "pv_min_threshold": -10,
+            "pv_max_threshold": 20,
+            "pv_ensure_in_range": "true",
+            "pv_compute_snr": "false",
+            "pv_snr_min_threshold": 30
+        },
         "diode_readback": {
             "pv_name": "pva://BL51P-EA-PANDA-02:FmcIn:Val1",
             "pv_datatype": "int",
-        #     # "min_threshold": "8",
-        #     # "max_threshold": "28",
-        #     # "monitor_pv_threshold": "bool",
+            "pv_min_threshold": -10,
+            "pv_max_threshold": 20,
+            "pv_ensure_in_range": "false",
+            "pv_compute_snr": "true",
+            "pv_snr_min_threshold": 30
         },
-        # "feedrate": {
-        #     "pv_name": "BL51P-MO-STEP-06:FEEDRATE_RBV",
-        #     "pv_datatype": "float",
-        # },
-        # "pmactype": {
-        #     "pv_name": "BL51P-MO-STEP-06:PMACTYPE",
-        #     "pv_datatype": "str",
-        # },
-        # "motor_encoder": {
-        #     "pv_name": "BL51P-OP-PCHRO-01:TS:XFINE.UEIP",
-        #     "pv_datatype": "str",
-        # },
     }
     yield from seq_table_uniform_scan(
         0,
-        5,
-        0.002,
-        # 1,
-        # 0.5,
+        10,
         1,
-        num_trajectory_points= 100,
-        number_of_sweeps=1,
-        # add_sweep_triggers=True,
+        5,
+        num_trajectory_points= 10,
+        number_of_sweeps=4,
+        add_sweep_triggers=False,
+        ramp_time = 0.001,
+        turnaround_time = 0.0001,
         # spectrum_triggers=generate_test_triggers(),
-        readable_pvs=readable_pvs,
+        # readable_pvs=readable_pvs,
         metadata={"user_comment": "this is a test"},
         motor=ts,
         panda=p,
     )
 
+def seq_table_two_panda_plan() -> MsgGenerator: 
 
-def seq_table_two_panda_plan() -> MsgGenerator:
-    # setup and enable the 2nd sequence table, ready to receive triggers
-    # from the 1st sequence table.
-    # yield from setup_seq_table_spectrum_triggers(panda_triggers, p, 2)
+    # setup and enable the 2nd sequence table, ready to receive triggers 
+    # from the 1st sequence table. 
+    # yield from setup_seq_table_spectrum_triggers(panda_triggers, p, 2) 
 
-    yield from seq_table_two_panda_scan(
-        start=1,
-        stop=10,
-        stepsize=1,
-        time_per_sweep=2,
-        add_sweep_triggers=True,
-        number_of_sweeps=10,
-        spectrum_triggers=generate_test_triggers(),
-        motor=ts,
-        panda=p,
-        panda2=p2,
-    )
+    yield from seq_table_two_panda_scan( 
+        start=1, 
+        stop=10, 
+        stepsize=1, 
+        time_per_sweep=2, 
+        add_sweep_triggers=True, 
+        number_of_sweeps=10, 
+        num_trajectory_points=10, 
+        spectrum_triggers=[ 
+            [[1, 2], 0.0001, 0, 1, 0, 1], 
+            [[1, 2], 0.0001, 0, 1, 0, 1], 
+            [[1, 2], 0.0001, 0, 1, 0, 1], 
+        ],  
+        motor=ts, 
+        panda=p, 
+        panda2=p2, 
+    ) 
 
 
 def energy_scan() -> MsgGenerator:
@@ -146,7 +148,16 @@ def restore_panda() -> MsgGenerator:
         panda = p, restore_settings=False, restore_dataset_settings=True, store_settings=False 
     ) 
 
+def trajectory_plan() -> MsgGenerator:
+    yield from trajectory_fly_scan(
+        start= 0,
+        stop= 10,
+        num_readouts= 100,
+        duration= 0.1
+    )
+
 RE(two_seq_tables_plan())
 # RE(seq_table_two_panda_plan())
 # RE(energy_scan())
 # RE(restore_panda())
+# RE(trajectory_plan())
