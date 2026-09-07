@@ -26,6 +26,7 @@ dependencies = [
     "typer",
     "h5py",
     "xraydb",
+    "requests"
 ]
 
 dynamic = ["version"]
@@ -43,6 +44,7 @@ dev = [
     "ruff",
     "tox-uv",
     "types-mock",
+    "types-requests"
 ]
 
 [project.scripts]
