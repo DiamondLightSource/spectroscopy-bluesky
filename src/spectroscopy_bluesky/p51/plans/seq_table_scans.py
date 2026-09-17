@@ -406,10 +406,8 @@ def seq_table_gated_trigger(
     """Position based scan using the sequencer table and a gated trigger."""
     num = abs(int(((stop + stepsize) - start) / stepsize))
 
-    time_per_traj_point = time_per_sweep / num
-
     rep = 2 if number_of_sweeps > 1 else 1
-    trig_spec = Fly(float(time_per_traj_point) @ (rep * ~Line(motor, start, stop, num)))
+    trig_spec = Fly(1.0 @ (rep * ~Line(motor, start, stop, num)))
 
     capture_positions = np.zeros(len(trig_spec.frames().lower[motor]) + 2)
     sweep = "pos" if stop > start else "neg"
@@ -434,11 +432,15 @@ def seq_table_gated_trigger(
 
     # Create an offseted and scaled sine wave for the trajectory
     rad = np.arange(0, 2 * np.pi, 0.01)
-    scale = 1.1 * np.abs(stop - start)
+    # Need to add a bit of a scale so that our trajectory is slightly longer
+    # than our acquisition region so that the gating won't finish
+    # on a region not covered by the trajectory
+    scale = 1.05 * np.abs(stop - start)
     mov_dir = -1 if start < stop else 1
     deg = (mov_dir * scale / 2) * np.cos(rad)
     inner_spec = Array(axis=motor, array=None, bounds=deg)
     traj_rep = int(number_of_sweeps / 2) if number_of_sweeps > 1 else number_of_sweeps
+    time_per_traj_point = time_per_sweep / len(deg)
     spec = Fly(time_per_traj_point @ (traj_rep * inner_spec))
     print(f"Scale for the wave: {scale}")
 
@@ -552,7 +554,7 @@ def seq_table_position_scan(
     )
     # append position sequence table setup to panda entry (make empty list first
     # if not already present).
-    panda_dict.setdefault(panda, [prepare_position_seqtable, prepare_panda_data(panda)])
+    panda_dict.setdefault(panda, [prepare_panda_data(panda), prepare_position_seqtable])
 
     if "panda_debug" in kwargs.keys():
         print("panda_debug in kwargs.keys")
