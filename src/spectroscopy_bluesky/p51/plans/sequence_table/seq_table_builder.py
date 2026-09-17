@@ -118,6 +118,31 @@ def create_seqtable(
     direction.append(direction[-1])
 
     table = SeqTable()  # type: ignore
-    for d, p in zip(direction, enc_count_positions, strict=True):
-        table += SeqTable.row(repeats=1, trigger=d, position=p, **kwargs)
+    if kwargs.get("outa1") is not None:
+        print("outa1 is not None")
+        for d, p, t1, a1, b1, t2, a2, b2 in zip(
+            direction,
+            enc_count_positions,
+            kwargs["time1"],
+            kwargs["outa1"],
+            kwargs["outb1"],
+            kwargs["time2"],
+            kwargs["outa2"],
+            kwargs["outb2"],
+            strict=True,
+        ):
+            table += SeqTable.row(
+                repeats=1,
+                trigger=d,
+                position=p,
+                time1=t1,
+                outa1=a1,
+                outb1=b1,
+                time2=t2,
+                outa2=a2,
+                outb2=b2,
+            )
+    else:
+        for d, p in zip(direction, enc_count_positions, strict=True):
+            table += SeqTable.row(repeats=1, trigger=d, position=p, **kwargs)
     return table
