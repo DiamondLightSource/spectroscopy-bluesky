@@ -1,0 +1,29 @@
+# Move to top level of spectroscopy_bluesky git repo and build with :
+#   podman build -t <image name> -f src/spectroscopy_bluesky/common/processing_service/Dockerfile.processing $(pwd)
+# The path at the end is critical - it sets the 'build context' (base dir for paths on local filesystem)
+# Run with :
+#   podman run -p 8000:8000 <image-name>
+# Start shell into pod with :
+#   podman exec -it <container id> -it /bin/bash
+
+FROM python:3.11-slim
+
+# install procps and hdf5-tools
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends procps hdf5-tools vim\
+ && rm -rf /var/lib/apt/lists/*
+
+# Set 'working directory' in the container - so subsequent COPY commands work from there
+WORKDIR /app
+
+# Copy requirements.txt from local filesystem into the container (start path on localfilesystem is set by 'build context') 
+COPY src/spectroscopy_bluesky/common/processing_service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# make copy of code from git repo (spectroscopy_bluesky) 
+COPY src/spectroscopy_bluesky/ ./src/spectroscopy_bluesky/
+
+# Set python path so it can locate modules in the source code tree
+ENV PYTHONPATH=/app/src
+
+CMD ["uvicorn", "spectroscopy_bluesky.common.processing_service.api:app", "--host", "0.0.0.0", "--port", "8000"]
