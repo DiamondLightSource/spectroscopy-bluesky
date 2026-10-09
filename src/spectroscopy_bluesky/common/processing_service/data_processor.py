@@ -267,12 +267,12 @@ class Processor:
                 or config.output_path == ""
                 or len(config.data_names) == 0
             ):
-                # copy everything
+                # if no names have been set, copy everything
                 processed_data.update(all_data)
             else:
                 # extract required NDArrays
                 data = [all_data[name] for name in config.data_names]
-                print(f"Data for {config.output_path} : {data}")
+
                 # run the processing function, pass the NDArrays as args.
                 processed_data[config.output_path] = config.function(*data)
 

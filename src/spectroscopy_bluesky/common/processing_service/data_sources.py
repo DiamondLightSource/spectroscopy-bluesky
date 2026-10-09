@@ -3,8 +3,9 @@ import socket
 import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Thread
-from time import sleep
+from time import sleep, time
 from typing import Any
 
 import numpy as np
@@ -194,6 +195,7 @@ class SocketDatasource(Datasource):
         self.collection_running = False
         self.socket_max_readsize_kb = 10 * 1024
         self._tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket_timeout = 2.0
         self._data_connection = DataConnection()
         self._socket_connected = False
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -202,12 +204,32 @@ class SocketDatasource(Datasource):
         # Nothing to be done here
         pass
 
+    def test_connection(self):
+        """Test that connection can be established (by calling
+        :func:`~connect_socket`)"""
+        try:
+            self.connect_socket()
+        except OSError as e:
+            raise Exception(
+                f"Problem connecting to '{self.ip_address}' on port {self.data_port}", e
+            ) from e
+        finally:
+            self._tcp_socket.close()
+
+    def connect_socket(self):
+        """Connect the socket.
+        Throws an exception if connection cannot be established
+        (e.g. if host cannot be reached, refuses connection or times out)
+        """
+        self._tcp_socket.settimeout(self.socket_timeout)
+        self._tcp_socket.connect((self.ip_address, self.data_port))
+
     def connect(self):
         self.logger.info(
             f"Connecting to Panda TCP socket : ip address = {self.ip_address}, "
             f"port = {self.data_port}"
         )
-        self._tcp_socket.connect((self.ip_address, self.data_port))
+        self.connect_socket()
         self._socket_connected = True
         connection_commands = self._data_connection.connect(self.scaled_data)
         self._tcp_socket.sendall(connection_commands)
@@ -301,6 +323,10 @@ class SocketDatasource(Datasource):
         return dat
 
 
+class DataNotAvailableError(Exception):
+    """Raised when required data is not yet available in the input file."""
+
+
 class HdfDatasource(Datasource):
     def __init__(self, **reader_options: dict[Any, Any]):
         super().__init__()
@@ -310,7 +336,12 @@ class HdfDatasource(Datasource):
         self.h5_file: File | None = None
         self.dataset_names: list[str] = []
         self.logger = logging.getLogger(self.__class__.__name__)
+
         self.file_path: str = ""
+        """ Full path to the Hdf file to be read """
+
+        self.file_timeout = 30.0
+        """ how to long wait for Hdf file be readable before raising exeption """
 
     def configure_source(self, source_path: str):
         self.file_path = source_path
@@ -323,12 +354,48 @@ class HdfDatasource(Datasource):
             self.close()
         self.logger.info(f"Connecting to hdf file : {self.file_path}")
 
+        self.check_file_is_readable()
+
         self.h5_file = File(
             self.file_path, libver="latest", swmr=True, **self.reader_options
         )
 
+        self.check_file_has_datasets(self.h5_file)
+
         self.h5_datasets: dict[str, Dataset] = {}
         self._setup_datasets()
+
+    def check_file_is_readable(self):
+        """Wait until file at :attr:`file_path` file is present on disc.
+        Raises:
+            FileNotFoundError: if timeout :attr:`file_timeout` is reached.
+        """
+        self.logger.info(f"Waiting for Hdf file at {self.file_path} to be readable")
+        if not self.run_until_true(Path(self.file_path).is_file):
+            raise FileNotFoundError("Timeout out waiting for hdf to be created")
+
+    def check_file_has_datasets(self, h5_file: File):
+        """Wait until Hdf file :attr:`file_path` contains 1 or more datasets
+            Raises:
+        Exception: if timeout :attr:`file_timeout` is reached.
+        """
+
+        def has_dataset():
+            return len(h5_file.keys()) > 0
+
+        self.logger.info(f"Waiting for datasets to be added tp {self.file_path}")
+        if not self.run_until_true(has_dataset):
+            raise DataNotAvailableError("Timeout waiting for HDF file to contain data")
+
+    def run_until_true(self, predicate):
+        end_time = time() + self.file_timeout
+        finished = False
+        while not finished and time() < end_time:
+            finished = predicate()
+            if finished:
+                return True
+            sleep(0.1)
+        return False
 
     def set_data_names(self, dataset_names: list[str]):
         self.dataset_names = dataset_names
@@ -388,7 +455,9 @@ class HdfDatasource(Datasource):
                 )
 
             self.h5_datasets[name] = dataset
-        self.logger.info(f"Datasets for {self.file_path} : {self.dataset_names}")
+        self.logger.info(
+            f"Datasets to be read from {self.file_path} : {self.dataset_names}"
+        )
 
     def read_data(self, start_frame: int, end_frame: int) -> dict[str, NDArray]:
         if len(self.dataset_names) == 0:
@@ -414,38 +483,3 @@ class HdfDatasource(Datasource):
             data[name] = dataset
 
         return data
-
-
-def test_frame_data_collection():
-    fdc = FrameDataCollection()
-    num_frames = 5
-    shape = (num_frames, 1)
-    num_datasets = 10
-    orig_datasets: list[NDArray] = []
-    data_name = "COUNTER1.OUT.Value"
-    for i in range(0, num_datasets):
-        # make array of random numbers, set the data name and type
-        data = np.random.random(shape).astype(dtype=[(data_name, "<f8")])
-        orig_datasets.append(data)
-        fdc.add_data(i * shape[0], FrameData(data))
-
-    # check number of frames across all datasets is correct
-    assert fdc.get_num_frames() == shape[0] * num_datasets
-
-    # test we can extract original datasets
-    for i in range(0, num_datasets):
-        orig = orig_datasets[i][data_name]
-        arr2 = fdc.get_data(i * num_frames, (i + 1) * num_frames)[data_name]
-        assert np.array_equal(orig, arr2), (
-            f"Extracted array :\n {arr2}\n is not same as original :\n{orig}!"
-        )
-
-    # test we can extract frames across 2 datasets
-    for i in range(0, num_datasets, 2):
-        orig = np.concat([orig_datasets[i], orig_datasets[i + 1]])[data_name]
-        start_frame = i * num_frames
-        end_frame = start_frame + 2 * num_frames
-        arr2 = fdc.get_data(start_frame, end_frame)[data_name]
-        assert np.array_equal(orig, arr2), (
-            f"Extracted array :\n {arr2}\n is not same as original :\n{orig}!"
-        )

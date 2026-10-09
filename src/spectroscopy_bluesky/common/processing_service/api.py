@@ -5,11 +5,13 @@ import uuid
 from asyncio import Task
 from dataclasses import dataclass
 from datetime import datetime
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from spectroscopy_bluesky.common.processing_service import (
     HdfDatasource,
@@ -104,11 +106,19 @@ def to_processing_config(processing_step: ProcessorOutput) -> ProcessorFunctionO
 def check_file_exists(msg_prefix: str, file_path: str):
     if not Path(file_path).exists():
         raise HTTPException(
-            status_code=404, detail=f"{msg_prefix} '{file_path}' could not be accessed"
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"{msg_prefix} '{file_path}' could not be accessed",
         )
 
 
 app = FastAPI()
+
+
+@app.exception_handler(Exception)
+async def handle_exception(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=HTTPStatus.BAD_REQUEST, content={"detail": repr(exc)}
+    )
 
 
 @app.get("/health")
@@ -133,6 +143,7 @@ async def start_processor(setup: ProcessorSetup):
             # panda TCP socket
             logging.info(f"Making SocketDatasource for : {source_name}")
             datasource = SocketDatasource(ip_address=source_name)
+            datasource.test_connection()
             datasources.append(datasource)
 
     hdf_writer = HdfDataWriter(setup.output_file)
