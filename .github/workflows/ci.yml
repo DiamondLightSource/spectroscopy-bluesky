@@ -5,11 +5,10 @@ on:
     branches:
       - main
     tags:
-      - '*'
+      - "*"
   pull_request:
 
 jobs:
-
   lint:
     uses: ./.github/workflows/_tox.yml
     with:
@@ -47,7 +46,7 @@ jobs:
 
   dist:
     uses: ./.github/workflows/_dist.yml
-  
+
   release:
     needs: [dist, test]
     if: github.ref_type == 'tag'

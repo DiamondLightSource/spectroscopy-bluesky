@@ -1,0 +1,5 @@
+uvicorn[standard]
+fastapi
+h5py
+requests
+pandablocks

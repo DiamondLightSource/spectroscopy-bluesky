@@ -24,14 +24,6 @@ repos:
         types: [python]
         require_serial: true
       
-      - id: type-checking
-        name: type-checking with pyright
-        language: system
-        entry: pyright
-        types: [python]
-        always_run: true
-        require_serial: true
-
       - id: uv-sync
         name: update uv.lock and venv
         pass_filenames: false
