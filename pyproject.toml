@@ -44,9 +44,7 @@ dev = [
     "ruff",
     "tox-uv",
     "types-mock",
-    "types-requests"
-]
-test = [
+    "types-requests",
     "uvicorn[standard]",
     "httpx2",
     "fastapi",
@@ -129,7 +127,6 @@ commands = [
 
 [tool.tox.env.tests]
 description = "Run tests with coverage"
-dependency-groups = ["test"]
 commands = [
     [
         "pytest",
