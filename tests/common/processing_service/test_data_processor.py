@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from h5py import Dataset, File
 from numpy.typing import NDArray
+from pandablocks.connections import FrameData
 
 from spectroscopy_bluesky.common.processing_service import (
     Datasource,
@@ -16,7 +17,6 @@ from spectroscopy_bluesky.common.processing_service import (
 )
 from spectroscopy_bluesky.common.processing_service.data_sources import (
     DataNotAvailableError,
-    FrameData,
     FrameDataCollection,
 )
 
