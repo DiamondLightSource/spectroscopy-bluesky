@@ -121,6 +121,13 @@ commands = [
 
 [tool.tox.env.tests]
 description = "Run tests with coverage"
+deps = [
+    "uvicorn[standard]",
+    "fastapi",
+    "h5py",
+    "requests",
+    "pandablocks",
+]
 commands = [
     [
         "pytest",
