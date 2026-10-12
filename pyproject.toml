@@ -51,6 +51,7 @@ dev = [
     "h5py",
     "requests",
     "pandablocks",
+    "pytest-mock",
 ]
 
 [project.scripts]
