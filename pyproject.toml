@@ -47,14 +47,6 @@ dev = [
     "types-requests"
 ]
 
-test = [
-    "uvicorn[standard]",
-    "fastapi",
-    "h5py",
-    "requests",
-    "pandablocks",
-]
-
 [project.scripts]
 spectroscopy-bluesky = "spectroscopy_bluesky.__main__:main"
 
@@ -129,7 +121,13 @@ commands = [
 
 [tool.tox.env.tests]
 description = "Run tests with coverage"
-dependency_groups = ["test"]
+deps = [
+    "uvicorn[standard]",
+    "fastapi",
+    "h5py",
+    "requests",
+    "pandablocks",
+]
 commands = [
     [
         "pytest",
