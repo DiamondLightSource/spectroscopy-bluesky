@@ -46,6 +46,14 @@ dev = [
     "types-mock",
     "types-requests"
 ]
+test = [
+    "uvicorn[standard]",
+    "httpx2",
+    "fastapi",
+    "h5py",
+    "requests",
+    "pandablocks",
+]
 
 [project.scripts]
 spectroscopy-bluesky = "spectroscopy_bluesky.__main__:main"
@@ -121,14 +129,7 @@ commands = [
 
 [tool.tox.env.tests]
 description = "Run tests with coverage"
-deps = [
-    "uvicorn[standard]",
-    "httpx2",
-    "fastapi",
-    "h5py",
-    "requests",
-    "pandablocks",
-]
+dependency-groups = ["test"]
 commands = [
     [
         "pytest",
