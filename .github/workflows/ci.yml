@@ -24,7 +24,6 @@ jobs:
     with:
       runs-on: ${{ matrix.runs-on }}
       python-version: ${{ matrix.python-version }}
-      tox: tests
 
   container:
     needs: test
