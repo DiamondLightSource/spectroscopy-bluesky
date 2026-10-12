@@ -5,11 +5,10 @@ on:
     branches:
       - main
     tags:
-      - '*'
+      - "*"
   pull_request:
 
 jobs:
-
   lint:
     uses: ./.github/workflows/_tox.yml
     with:
@@ -25,7 +24,7 @@ jobs:
     with:
       runs-on: ${{ matrix.runs-on }}
       python-version: ${{ matrix.python-version }}
-      tox: test
+      tox: tests
 
   container:
     needs: test
@@ -48,7 +47,7 @@ jobs:
 
   dist:
     uses: ./.github/workflows/_dist.yml
-  
+
   release:
     needs: [dist, test]
     if: github.ref_type == 'tag'
