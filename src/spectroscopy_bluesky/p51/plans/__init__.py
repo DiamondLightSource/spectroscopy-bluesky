@@ -33,5 +33,5 @@ __all__ = [
     "plan_store_settings",
     "PandaSeqTableFlyable",
     "PMacTrajectoryFlyable",
-    "PcompFlyable"
+    "PcompFlyable",
 ]
