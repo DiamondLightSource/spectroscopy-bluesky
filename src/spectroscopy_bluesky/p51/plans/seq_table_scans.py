@@ -11,7 +11,6 @@ from dodal.beamlines.p51 import turbo_slit_pmac
 from dodal.common.coordination import inject
 from ophyd_async.core import (
     DetectorTrigger,
-    StandardFlyer,
     TriggerInfo,
     EnumTypes,
     Array1D,
@@ -20,16 +19,14 @@ from ophyd_async.core import (
     SubsetEnum,
     SupersetEnum,
 )
+
 from ophyd_async.epics.motor import Motor
-from ophyd_async.epics.pmac import (
-    PmacTrajectoryTriggerLogic,
-    PmacScanInfo,
-)
+from ophyd_async.epics.pmac import PmacScanInfo
 from ophyd_async.fastcs.panda import (
     HDFPanda,
     SeqTable,
     SeqTableInfo,
-    StaticSeqTableTriggerLogic,
+    StaticSeqTableFlyableLogic,
 )
 from ophyd_async.plan_stubs import ensure_connected
 from ophyd_async.epics.core import epics_signal_r
@@ -54,6 +51,8 @@ from spectroscopy_bluesky.common.xas_scans import (
 from .common import (
     get_encoder_counts,
     setup_trajectory_scan_pvs,
+    PMacTrajectoryFlyable,
+    PandaSeqTableFlyable,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -157,9 +156,8 @@ def prepare_seq_table(
         sequence_table=seq_table, repeats=num_repeats, prescale_as_us=prescale_as_us
     )
 
-    seqtable_flyer = StandardFlyer(
-        StaticSeqTableTriggerLogic(panda.seq[seq_table_number])
-    )
+    seq_table_logic = StaticSeqTableFlyableLogic(seq=panda.seq[seq_table_number])
+    seqtable_flyer = PandaSeqTableFlyable(flyable_logic=seq_table_logic)
 
     trigger_info = TriggerInfo(
         number_of_events=len(seq_table),
@@ -418,7 +416,9 @@ def seq_table_position_scan(
     # Use multiple repetitions of seq table to capture subsequent sweeps.
     seqTable_builder = SeqTableBuilder()
     seqTable_builder.convert_to_encoder = get_encoder_counts
-    seqTable_builder.add_positions(positions, time1=1, outa1=True, time2=1, outa2=False)
+    seqTable_builder.add_positions(
+        positions, time1=1, outa1=True, time2=100, outa2=False
+    )
     if add_sweep_triggers:
         seqTable_builder.add_start_end_triggers("outb1", "outc1")
 
@@ -472,8 +472,7 @@ def seq_table_scan(
     for detector in detectors:
         yield from ensure_connected(detector)
 
-    pmac_trajectory = PmacTrajectoryTriggerLogic(pmac)
-    pmac_trajectory_flyer = StandardFlyer(pmac_trajectory)  # pyright: ignore[reportArgumentType]
+    pmac_trajectory_flyer = PMacTrajectoryFlyable(pmac=pmac)
     pamc_trigger_logic = PmacScanInfo(
         spec=scan_spec,
         ramp_time=kwargs.get("ramp_time") or None,
@@ -520,7 +519,7 @@ def seq_table_scan(
             yield from prepare_pv_monitoring(scan_parameters["readable_pvs"])
 
         yield from bps.collect_while_completing(
-            flyers=[pmac_trajectory_flyer],
+            flyers=[pmac_trajectory_flyer, *detectors],
             dets=[*detectors],
             stream_name="primary",
             flush_period=0.5,

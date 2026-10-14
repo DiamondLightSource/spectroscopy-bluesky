@@ -1,60 +1,31 @@
-import asyncio
 import math as mt
 
 import bluesky.plan_stubs as bps
 import bluesky.preprocessors as bpp
-from aioca import caput
 from bluesky.utils import MsgGenerator
 from dodal.beamlines.p51 import turbo_slit_pmac
 from dodal.common.coordination import inject
 from ophyd_async.core import (
     DetectorTrigger,
     FlyMotorInfo,
-    StandardFlyer,
+    StandardFlyable,
     TriggerInfo,
-    wait_for_value,
 )
 from ophyd_async.epics.motor import Motor
-from ophyd_async.epics.pmac import (
-    PmacTrajectoryTriggerLogic,
-)
 from ophyd_async.fastcs.panda import (
     HDFPanda,
     PandaPcompDirection,
     PcompInfo,
-    StaticPcompTriggerLogic,
 )
-from ophyd_async.fastcs.panda._block import PcompBlock
 from ophyd_async.plan_stubs import ensure_connected
 from scanspec.specs import Fly, Line
 
 from .common import (
+    PcompFlyable,
+    PMacTrajectoryFlyable,
     get_encoder_counts,
     setup_trajectory_scan_pvs,
 )
-
-
-class _StaticPcompTriggerLogic(StaticPcompTriggerLogic):
-    """For controlling the PandA `PcompBlock` when flyscanning."""
-
-    def __init__(self, pcomp: PcompBlock) -> None:
-        self.pcomp = pcomp
-
-    async def kickoff(self) -> None:
-        await wait_for_value(self.pcomp.active, True, timeout=1)
-
-    async def prepare(self, value: PcompInfo) -> None:
-        await caput("BL51P-EA-PANDA-02:SRGATE1:FORCE_RST", "1", wait=True)
-        await asyncio.gather(
-            self.pcomp.start.set(value.start_postion),
-            self.pcomp.width.set(value.pulse_width),
-            self.pcomp.step.set(value.rising_edge_step),
-            self.pcomp.pulses.set(value.number_of_pulses),
-            self.pcomp.dir.set(value.direction),
-        )
-
-    async def stop(self):
-        pass
 
 
 def calculate_stuff(start, stop, num):
@@ -73,7 +44,7 @@ def get_pcomp_info(width, start_pos, direction_of_sweep: PandaPcompDirection, nu
     rising_edge_step = mt.ceil(abs(get_encoder_counts(width, 0)))
 
     panda_pcomp_info = PcompInfo(
-        start_postion=start_pos_pcomp,
+        start_position=start_pos_pcomp,
         pulse_width=1,
         rising_edge_step=rising_edge_step,
         number_of_pulses=num,
@@ -91,7 +62,7 @@ def fly_scan_ts(
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
 ) -> MsgGenerator:
-    panda_pcomp = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
+    panda_pcomp = PcompFlyable(panda.pcomp[1])
 
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp])
@@ -105,7 +76,7 @@ def fly_scan_ts(
             time_for_move=num * duration,
         )
         panda_pcomp_info = PcompInfo(
-            start_postion=mt.ceil(get_encoder_counts(start_pos)),
+            start_position=mt.ceil(get_encoder_counts(start_pos)),
             pulse_width=1,
             rising_edge_step=mt.ceil(abs(get_encoder_counts(width, 0))),
             number_of_pulses=num,
@@ -148,7 +119,7 @@ def fly_sweep(
     number_of_sweeps: int = 5,
     runup: float = 0.0,
 ) -> MsgGenerator:
-    panda_pcomp = StandardFlyer(StaticPcompTriggerLogic(panda.pcomp[1]))
+    panda_pcomp = PcompFlyable(panda.pcomp[1])
 
     def inner_squared_plan(start: float | int, stop: float | int):
         width, start_pos, stop_pos, direction_of_sweep = calculate_stuff(
@@ -220,10 +191,10 @@ def fly_sweep_both_ways(
     panda: HDFPanda = inject("panda1"),  # noqa: B008
     number_of_sweeps: int = 5,
 ) -> MsgGenerator:
-    panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
-    panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
+    panda_pcomp1 = PcompFlyable(panda.pcomp[1])
+    panda_pcomp2 = PcompFlyable(panda.pcomp[2])
 
-    def inner_squared_plan(start: float, stop: float, panda_pcomp: StandardFlyer):
+    def inner_squared_plan(start: float, stop: float, panda_pcomp: StandardFlyable):
         motor_info = FlyMotorInfo(
             # include extra runup distance on start and end positions
             start_position=start,
@@ -307,8 +278,8 @@ def trajectory_fly_scan(
     motor: Motor = inject("turbo_slit_x"),  # noqa: B008
     panda: HDFPanda = inject("panda1"),  # noqa: B008
 ) -> MsgGenerator:
-    panda_pcomp1 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[1]))
-    panda_pcomp2 = StandardFlyer(_StaticPcompTriggerLogic(panda.pcomp[2]))
+    panda_pcomp1 = PcompFlyable(panda.pcomp[1])
+    panda_pcomp2 = PcompFlyable(panda.pcomp[2])
     pmac = turbo_slit_pmac(motor)
 
     yield from ensure_connected(pmac, motor)
@@ -318,7 +289,7 @@ def trajectory_fly_scan(
     spec = Fly(float(duration) @ (Line(motor, start, stop, num)))
 
     trigger_logic = spec
-    pmac_trajectory_flyer = PmacTrajectoryTriggerLogic(pmac)
+    pmac_trajectory_flyer = PMacTrajectoryFlyable(pmac)
 
     @bpp.run_decorator()
     @bpp.stage_decorator([panda, panda_pcomp1, panda_pcomp2])
