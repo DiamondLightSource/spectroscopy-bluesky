@@ -1,9 +1,17 @@
+from functools import cached_property
+
 import bluesky.plan_stubs as bps
+from aioca import caput
 from bluesky.utils import MsgGenerator
-from ophyd_async.core import Settings, YamlSettingsProvider
+from ophyd_async.core import Settings, StandardFlyable, YamlSettingsProvider
 from ophyd_async.epics.core import epics_signal_rw
+from ophyd_async.epics.pmac import PmacIO, PmacTrajectoryFlyableLogic
 from ophyd_async.fastcs.panda import (
     HDFPanda,
+    PcompBlock,
+    PcompInfo,
+    StaticPcompFlyableLogic,
+    StaticSeqTableFlyableLogic,
     apply_panda_settings,
 )
 from ophyd_async.plan_stubs import (
@@ -105,3 +113,40 @@ def plan_restore_settings(panda: HDFPanda, name: str):
     )
     settings = yield from retrieve_settings(provider, name, panda)
     yield from apply_panda_settings(settings)
+
+
+class PandaSeqTableFlyable(StandardFlyable):
+    def __init__(self, flyable_logic: StaticSeqTableFlyableLogic, name=""):
+        self.flyable_logic = flyable_logic
+        self._name = name
+
+    @cached_property
+    def flyable_logic(self) -> StaticSeqTableFlyableLogic:
+        return self.flyable_logic
+
+
+class PMacTrajectoryFlyable(StandardFlyable):
+    def __init__(self, pmac: PmacIO, name=""):
+        self.pmac = pmac
+        self._name = name
+
+    @cached_property
+    def flyable_logic(self) -> PmacTrajectoryFlyableLogic:
+        return PmacTrajectoryFlyableLogic(self.pmac)
+
+
+class _StaticPcompTriggerLogic(StaticPcompFlyableLogic):
+    """For controlling the PandA `PcompBlock` when flyscanning."""
+
+    async def on_prepare(self, value: PcompInfo) -> None:
+        await caput("BL51P-EA-PANDA-02:SRGATE1:FORCE_RST", "1", wait=True)
+        await super().on_prepare(value)
+
+
+class PcompFlyable(StandardFlyable):
+    def __init__(self, pcomp: PcompBlock, name=""):
+        self.pcomp = pcomp
+
+    @cached_property
+    def flyable_logic(self) -> _StaticPcompTriggerLogic:
+        return _StaticPcompTriggerLogic(pcomp=self.pcomp)

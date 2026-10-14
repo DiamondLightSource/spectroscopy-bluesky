@@ -1,4 +1,7 @@
 from .common import (
+    PandaSeqTableFlyable,
+    PcompFlyable,
+    PMacTrajectoryFlyable,
     plan_store_settings,
     restore_panda_settings,
 )
@@ -28,4 +31,7 @@ __all__ = [
     "prepare_seq_table",
     "restore_panda_settings",
     "plan_store_settings",
+    "PandaSeqTableFlyable",
+    "PMacTrajectoryFlyable",
+    "PcompFlyable"
 ]
