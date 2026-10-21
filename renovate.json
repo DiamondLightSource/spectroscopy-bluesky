@@ -6,7 +6,10 @@
   "lockFileMaintenance": {
     "description": "Keep uv.lock up to date, merging if tests pass",
     "enabled": true,
-    "automerge": true
+    "automerge": true,
+    "schedule": [
+      "before 5am on the first day of the month"
+    ]
   },
   "packageRules": [
     {
