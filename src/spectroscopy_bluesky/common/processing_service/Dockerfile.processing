@@ -6,7 +6,7 @@
 # Start shell into pod with :
 #   podman exec -it <container id> -it /bin/bash
 
-FROM python:3.11-slim
+FROM python:3.15-slim
 
 # install procps and hdf5-tools
 RUN apt-get update \
