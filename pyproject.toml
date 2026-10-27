@@ -36,7 +36,6 @@ requires-python = ">=3.11"
 
 [dependency-groups]
 dev = [
-    "copier",
     "pre-commit",
     "pyright",
     "pytest",
@@ -64,6 +63,10 @@ GitHub = "https://github.com/DiamondLightSource/spectroscopy-bluesky"
 email = "iain.hall@diamond.ac.uk"
 name = "Iain Hall"
 
+
+[tool.uv]
+# Minimum uv to fix eMudhra CA cert incident (see discuss.python.org/t/109576)
+required-version = ">=0.13.5"
 
 [tool.setuptools_scm]
 version_file = "src/spectroscopy_bluesky/_version.py"
