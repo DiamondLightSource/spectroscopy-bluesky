@@ -13,7 +13,7 @@ from ophyd_async.fastcs.panda import (
     SeqTableInfo,
     StaticSeqTableFlyableLogic,
 )
-from ophyd_async.fastcs.xspress import XspressDetector
+from ophyd_async.fastcs.xspress import XspressDetector, XspressDetectorListMode
 from ophyd_async.plan_stubs import ensure_connected
 from scanspec.specs import Fly, Line
 
@@ -27,7 +27,7 @@ from .common import (
 
 
 def xsp_scan(
-    xspress: XspressDetector,
+    xspress: XspressDetector | XspressDetectorListMode,
     num_frames: int = 10,
     time_per_frame: float = 1,
 ) -> MsgGenerator:
@@ -52,7 +52,7 @@ def xsp_scan(
     def inner_plan():
         xsp_trigger = TriggerInfo(
             number_of_events=num_frames,
-            trigger=DetectorTrigger.INTERNAL,
+            trigger=DetectorTrigger.EXTERNAL_EDGE,
             livetime=time_per_frame,
         )
 
@@ -70,7 +70,7 @@ def xsp_motor_scan(
     time_per_sweep: float,
     motor: Motor,
     panda: HDFPanda,
-    detector: XspressDetector,
+    detector: XspressDetector | XspressDetectorListMode,
     num_trajectory_points: int = 10,
     number_of_sweeps: int = 2,
 ):

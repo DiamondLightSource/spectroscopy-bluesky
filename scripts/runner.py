@@ -29,9 +29,16 @@ def static_panda_path_provider_debug() -> PathProvider:
     )
 
 
-def static_xsp_path_provider() -> PathProvider:
+def static_xsp_mca_path_provider() -> PathProvider:
     return StaticPathProvider(
-        StaticFilenameProvider("xsp3xm2.h5"),
+        StaticFilenameProvider("xsp3xm2-mca.h5"),
+        PurePath("/dls/p51/data/2026/cm44254-4/tmp/"),
+    )
+
+
+def static_xsp_list_path_provider() -> PathProvider:
+    return StaticPathProvider(
+        StaticFilenameProvider("xsp3xm2-list.h5"),
         PurePath("/dls/p51/data/2026/cm44254-4/tmp/"),
     )
 
@@ -47,7 +54,14 @@ pmac = turbo_slit_pmac(ts)
 # eurotherm = eurotherm2k()
 xsp = XspressDetector(
     prefix="BL51P-EA-XSP-01:",
-    path_provider=static_xsp_path_provider(),
-    name="xsp3m2",
+    path_provider=static_xsp_mca_path_provider(),
+    name="xsp3m2-MCA",
 )
+
+# xsp = XspressDetectorListMode(
+#     prefix="BL51P-EA-XSP-01:",
+#     path_provider=static_xsp_list_path_provider(),
+#     name="xsp3m2-ListMode",
+# )
+
 RE(ensure_connected(p, p2, ts, pmac, xsp))
