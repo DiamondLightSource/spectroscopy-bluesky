@@ -116,7 +116,7 @@ jobs:
           DOCKER_BUILD_RECORD_UPLOAD: true
         with:
           context: ./src/spectroscopy_bluesky/common/processing_service
-          file: Dockerfile.processing
+          file: ./src/spectroscopy_bluesky/common/processing_service/Dockerfile.processing
           load: true
 
       - name: Create tags for publishing processing image
@@ -142,7 +142,7 @@ jobs:
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: ./src/spectroscopy_bluesky/common/processing_service
-          file: Dockerfile.processing
+          file: ./src/spectroscopy_bluesky/common/processing_service/Dockerfile.processing
           push: true
           tags: ${{ steps.meta-processing.outputs.tags }}
           labels: ${{ steps.meta-processing.outputs.labels }}
