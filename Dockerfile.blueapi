@@ -8,7 +8,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN uv pip install --no-cache-dir --no-compile \
     xraydb \
-    scipy
+    scipy \
+    pandablocks
 
 
 # Create and set permissions for uv venv, root cache
