@@ -66,7 +66,7 @@ jobs:
       ###############################
       # BlueAPI Container Image Build
       ###############################
-      
+
       - name: Build and export Dockerfile.blueapi to local cache
         uses: docker/build-push-action@v6
         env:
@@ -75,7 +75,7 @@ jobs:
           context: .
           file: Dockerfile.blueapi
           load: true
-    
+
       - name: Create tags for publishing BlueAPI image
         id: meta-blueapi
         uses: docker/metadata-action@v5
@@ -105,3 +105,46 @@ jobs:
           labels: ${{ steps.meta-blueapi.outputs.labels }}
           # Set the annotations to make the description appear in the GH repo page
           annotations: ${{ steps.meta-blueapi.outputs.annotations }}
+
+      ###############################
+      # BlueAPI Container Image Build
+      ###############################
+
+      - name: Build and export Dockerfile.processing to local cache
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: true
+        with:
+          context: .
+          file: ./src/spectroscopy_bluesky/common/processing_service/Dockerfile.processing
+          load: true
+
+      - name: Create tags for publishing processing image
+        id: meta-processing
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}-processing
+          labels: |
+            org.opencontainers.image.title=spectroscopy-bluesky-processing
+            org.opencontainers.image.description=Processing utilities for spectroscopy beamlines
+          annotations: |
+            org.opencontainers.image.title=spectroscopy-bluesky-processing
+            org.opencontainers.image.description=Processing utilities for spectroscopy beamlines
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - name: Push cached processing image to container registry
+        if: github.ref_type == 'tag'
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: ./src/spectroscopy_bluesky/common/processing_service/Dockerfile.processing
+          push: true
+          tags: ${{ steps.meta-processing.outputs.tags }}
+          labels: ${{ steps.meta-processing.outputs.labels }}
+          # Set the annotations to make the description appear in the GH repo page
+          annotations: ${{ steps.meta-processing.outputs.annotations }}
