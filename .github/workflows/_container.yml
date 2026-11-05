@@ -115,7 +115,7 @@ jobs:
         env:
           DOCKER_BUILD_RECORD_UPLOAD: true
         with:
-          context: ./src/spectroscopy_bluesky/common/processing_service
+          context: .
           file: ./src/spectroscopy_bluesky/common/processing_service/Dockerfile.processing
           load: true
 
@@ -141,7 +141,7 @@ jobs:
         env:
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
-          context: ./src/spectroscopy_bluesky/common/processing_service
+          context: .
           file: ./src/spectroscopy_bluesky/common/processing_service/Dockerfile.processing
           push: true
           tags: ${{ steps.meta-processing.outputs.tags }}
