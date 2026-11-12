@@ -2,10 +2,11 @@ import logging
 import socket
 import typing
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from time import sleep, time
+from time import monotonic, sleep
 from typing import Any
 
 import numpy as np
@@ -194,8 +195,8 @@ class SocketDatasource(Datasource):
         self.collection_finished = False
         self.collection_running = False
         self.socket_max_readsize_kb = 10 * 1024
-        self._tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket_timeout = 2.0
+        self._tcp_socket: socket.socket | None = None
+        self.socket_timeout = 10.0
         self._data_connection = DataConnection()
         self._socket_connected = False
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -214,23 +215,33 @@ class SocketDatasource(Datasource):
                 f"Problem connecting to '{self.ip_address}' on port {self.data_port}", e
             ) from e
         finally:
-            self._tcp_socket.close()
+            self.close()
 
     def connect_socket(self):
         """Connect the socket.
         Throws an exception if connection cannot be established
         (e.g. if host cannot be reached, refuses connection or times out)
         """
+        if self._tcp_socket is not None:
+            self.close()
+        self._socket_connected = False
+        self._tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._tcp_socket.settimeout(self.socket_timeout)
         self._tcp_socket.connect((self.ip_address, self.data_port))
+        self._socket_connected = True
 
     def connect(self):
         self.logger.info(
             f"Connecting to Panda TCP socket : ip address = {self.ip_address}, "
             f"port = {self.data_port}"
         )
+
         self.connect_socket()
-        self._socket_connected = True
+        if self._tcp_socket is None:
+            raise RuntimeError(
+                f"Unable to connect to panda socket {self.ip_address}:{self.data_port}"
+            )
+
         connection_commands = self._data_connection.connect(self.scaled_data)
         self._tcp_socket.sendall(connection_commands)
         ## need to make sure the data names are available immediately after connection
@@ -240,8 +251,9 @@ class SocketDatasource(Datasource):
         return self._socket_connected
 
     def close(self):
-        self._tcp_socket.close()
-        self._socket_connected = False
+        if self._tcp_socket is not None:
+            self._tcp_socket.close()
+            self._socket_connected = False
 
     def collect_in_thread(self):
         self._collection_thread = Thread(target=self.collect_data)
@@ -266,7 +278,7 @@ class SocketDatasource(Datasource):
         self.collection_running = False
 
     def _run_data_collection_loop(self):
-        if not self._socket_connected:
+        if not self._socket_connected or self._tcp_socket is None:
             raise RuntimeError(
                 f"Cannot collect data - 'connect' has not been called "
                 f"on SocketDatasource for {self.ip_address}"
@@ -366,13 +378,32 @@ class HdfDatasource(Datasource):
         self._setup_datasets()
 
     def check_file_is_readable(self):
-        """Wait until file at :attr:`file_path` file is present on disc.
+        """Wait until file at :attr:`file_path` file is present on disc and
+        it is readable as a SWMR file.
         Raises:
             FileNotFoundError: if timeout :attr:`file_timeout` is reached.
         """
         self.logger.info(f"Waiting for Hdf file at {self.file_path} to be readable")
         if not self.run_until_true(Path(self.file_path).is_file):
-            raise FileNotFoundError("Timeout out waiting for hdf to be created")
+            raise FileNotFoundError(
+                f"Timeout out waiting for {self.file_path} to be created"
+            )
+
+        self.logger.info(
+            f"Waiting for Hdf file at {self.file_path} to be readable using SWMR"
+        )
+        if not self.run_until_true(self.readable_as_swmr):
+            raise TimeoutError(
+                f"Timeout out waiting for SWMR access to {self.file_path}"
+            )
+
+    def readable_as_swmr(self):
+        try:
+            with File(self.file_path, libver="latest", swmr=True):
+                self.logger.info(f"File {self.file_path} readable using SWMR")
+                return True
+        except OSError:
+            return False
 
     def check_file_has_datasets(self, h5_file: File):
         """Wait until Hdf file :attr:`file_path` contains 1 or more datasets
@@ -387,10 +418,10 @@ class HdfDatasource(Datasource):
         if not self.run_until_true(has_dataset):
             raise DataNotAvailableError("Timeout waiting for HDF file to contain data")
 
-    def run_until_true(self, predicate):
-        end_time = time() + self.file_timeout
+    def run_until_true(self, predicate: Callable[[], bool]) -> bool:
+        end_time = monotonic() + self.file_timeout
         finished = False
-        while not finished and time() < end_time:
+        while not finished and monotonic() < end_time:
             finished = predicate()
             if finished:
                 return True

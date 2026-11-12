@@ -6,7 +6,6 @@ from asyncio import Task
 from dataclasses import dataclass
 from datetime import datetime
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -14,12 +13,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from spectroscopy_bluesky.common.processing_service import (
+    ProcessorOutput,
+    ProcessorSetup,
+)
+from spectroscopy_bluesky.common.processing_service.backend import (
     HdfDatasource,
     HdfDataWriter,
     Processor,
     ProcessorFunctionOutput,
-    ProcessorOutput,
-    ProcessorSetup,
     ProcessorState,
     SocketDatasource,
 )
@@ -103,14 +104,6 @@ def to_processing_config(processing_step: ProcessorOutput) -> ProcessorFunctionO
     return p
 
 
-def check_file_exists(msg_prefix: str, file_path: str):
-    if not Path(file_path).exists():
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"{msg_prefix} '{file_path}' could not be accessed",
-        )
-
-
 app = FastAPI()
 
 
@@ -135,14 +128,15 @@ async def start_processor(setup: ProcessorSetup):
         if source_name.endswith((".hdf5", ".h5")):
             # hdf file data source
             logging.info(f"Making HdfDatasource for : {source_name}")
-            check_file_exists("Input file", source_name)
             datasource = HdfDatasource()
             datasource.configure_source(source_name)
+            datasource.file_timeout = setup.source_timeout
             datasources.append(datasource)
         else:
             # panda TCP socket
             logging.info(f"Making SocketDatasource for : {source_name}")
             datasource = SocketDatasource(ip_address=source_name)
+            datasource.socket_timeout = setup.source_timeout
             datasource.test_connection()
             datasources.append(datasource)
 
