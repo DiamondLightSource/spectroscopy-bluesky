@@ -3,6 +3,7 @@ from functools import cached_property
 import bluesky.plan_stubs as bps
 from aioca import caput
 from bluesky.utils import MsgGenerator
+from dodal.common.coordination import inject
 from ophyd_async.core import Settings, StandardFlyable, YamlSettingsProvider
 from ophyd_async.epics.core import epics_signal_rw
 from ophyd_async.epics.pmac import PmacIO, PmacTrajectoryFlyableLogic
@@ -60,23 +61,26 @@ def setup_trajectory_scan_pvs(prefix: str = "BL51P-MO-STEP-06"):
 
 
 def restore_panda_settings(
-    detectors: list[HDFPanda],
+    detectors: HDFPanda = inject("panda1"),  # noqa: B008
     restore_settings: bool = False,
     restore_dataset_settings: bool = False,
     store_settings: bool = False,
 ) -> MsgGenerator:
 
-    for dets in detectors:
-        if restore_settings:
-            yield from plan_restore_settings(panda=dets, name=f"seq_table_{dets.name}")
+    if restore_settings:
+        yield from plan_restore_settings(
+            panda=detectors, name=f"seq_table_{detectors.name}"
+        )
 
-        if restore_dataset_settings:
-            yield from plan_restore_dataset_settings(
-                panda=dets, name=f"seq_table_{dets.name}"
-            )
+    if restore_dataset_settings:
+        yield from plan_restore_dataset_settings(
+            panda=detectors, name=f"seq_table_{detectors.name}"
+        )
 
-        if store_settings:
-            yield from plan_store_settings(panda=dets, name=f"seq_table_{dets.name}")
+    if store_settings:
+        yield from plan_store_settings(
+            panda=detectors, name=f"seq_table_{detectors.name}"
+        )
 
 
 def plan_store_settings(panda: HDFPanda, name: str):
@@ -95,13 +99,10 @@ def plan_restore_dataset_settings(panda: HDFPanda, name: str):
     dataset, others = settings.partition(
         lambda signal: (
             signal.name.endswith("_dataset")
-            and any(k in signal.name for k in ["out", "val", "pos"])
+            and any(k in signal.name for k in ["out", "val", "pos", "pcap"])
         )
     )
-    settings_dict = {
-        signal: (value if value else signal.name.replace(".", "_"))
-        for signal, value in dataset.items()
-    }
+    settings_dict = {signal: value for signal, value in dataset.items() if value != ""}
     new_dataset = Settings(panda, settings_dict)
     yield from apply_settings(new_dataset)
 

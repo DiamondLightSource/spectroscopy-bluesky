@@ -8,6 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 from bluesky.utils import MsgGenerator
 from dodal.beamlines.p51 import turbo_slit_pmac
+
 from dodal.common.coordination import inject
 from ophyd_async.core import (
     DetectorTrigger,
@@ -36,6 +37,11 @@ from collections.abc import Callable
 from spectroscopy_bluesky.common.quantity_conversion import (
     si_111_lattice_spacing,
     energy_to_bragg_angle,
+)
+
+from spectroscopy_bluesky.common.devices.dataproc_detector import (
+    create_test_processing,
+    DataProcessingDetector,
 )
 
 from spectroscopy_bluesky.p51.plans.sequence_table import (
@@ -312,13 +318,32 @@ def seq_table_two_panda_scan(
     )
 
 
+def setup_dataproc_detector(dataproc_detector: DataProcessingDetector):
+    processing_setup = create_test_processing()
+    dataproc_detector.set_processing_config(processing_setup)
+
+    # processing_detector = create_processing_detector(processing_setup,
+    # path_provider=panda.path_provider)
+    def prepare_processing():
+        trigger_info = TriggerInfo(
+            number_of_events=202,
+            trigger=DetectorTrigger.INTERNAL,
+            livetime=1e-5,
+            deadtime=1e-5,
+        )
+        yield from bps.prepare(dataproc_detector, trigger_info, wait=True)
+
+    return prepare_processing
+
+
 def seq_table_uniform_scan(
     start: float,
     stop: float,
     stepsize: float,
     time_per_sweep: float,
-    motor: Motor,
-    panda: HDFPanda,
+    motor: Motor = inject("turbo_slit_x"),  # noqa: B008
+    panda: HDFPanda = inject("panda1"),  # noqa: B008
+    dataproc_detector: DataProcessingDetector = inject("dataproc_detector"),  # noqa: B008
     num_trajectory_points: int = 10,
     spectrum_triggers: list[SpectrumBasedTrigger] | None = None,
     add_sweep_triggers: bool = False,
@@ -328,6 +353,7 @@ def seq_table_uniform_scan(
     panda_dict: dict[HDFPanda, list[Callable[[], MsgGenerator]]] | None = None,
     readable_pvs: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
+    is_adaptive_scan: bool = False,  # not used
 ) -> MsgGenerator:
 
     capture_positions = np.arange(start, stop + 0.5 * stepsize, stepsize)
@@ -335,6 +361,7 @@ def seq_table_uniform_scan(
     # setup a second seq table for 'spectrum based' triggering :
     if panda_dict is None:
         panda_dict = {}
+
     if spectrum_triggers is not None:
         seq_table = (
             SeqTableBuilder()
@@ -346,6 +373,10 @@ def seq_table_uniform_scan(
             panda, seq_table, 2, prepare_panda=False
         )
         panda_dict[panda] = [prepare_triggers_seqtable]
+
+    # setup dataproc_detector; add detector and preparer callable to panda_dict
+    preparer = setup_dataproc_detector(dataproc_detector)
+    panda_dict[dataproc_detector] = [preparer]
 
     scan_params_dict = {
         "scan_name": "seq_table_uniform_scan",
