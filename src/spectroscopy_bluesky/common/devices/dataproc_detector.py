@@ -140,8 +140,15 @@ class DataLogic(DetectorDataLogic):
     async def prepare_unbounded(self, datakey_name: str) -> StreamableDataProvider:
 
         self.logger.info(
-            f"Setting up processing input and output paths. datakey_name = {datakey_name}"
+            "Setting up processing input and output paths. "
+            f"datakey_name = {datakey_name}"
         )
+
+        if self.processing_runner.config is None:
+            raise Exception(
+                f"Can't prepare DataLogic for {datakey_name} - "
+                "no processing configuration has been set!"
+            )
 
         # replace input and output paths using values from path provider
         if self.path_provider is not None:
