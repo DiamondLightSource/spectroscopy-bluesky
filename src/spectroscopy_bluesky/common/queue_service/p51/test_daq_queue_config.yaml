@@ -1,5 +1,5 @@
 converter:
-  path: "src.spectroscopy_bluesky.common.queue_service.p51.p51_converter"
+  path: "spectroscopy_bluesky.common.queue_service.p51.p51_converter"
   name: "P51Converter"
 blueapi:
   api:
