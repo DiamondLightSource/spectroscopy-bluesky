@@ -1,0 +1,12 @@
+converter:
+  path: "src.spectroscopy_bluesky.common.queue_service.p51.p51_converter"
+  name: "P51Converter"
+blueapi:
+  api:
+    url: "http://localhost:8000"
+  stomp:
+    enabled: true # All other stomp settings will be ignored if this is false
+    url: tcp://localhost:61613
+    auth:
+      username: guest
+      password: guest

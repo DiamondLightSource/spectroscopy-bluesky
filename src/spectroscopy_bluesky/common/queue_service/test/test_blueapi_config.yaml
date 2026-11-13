@@ -1,0 +1,23 @@
+api:
+  url: "http://localhost:8000"
+stomp:
+  enabled: true # All other stomp settings will be ignored if this is false
+  url: tcp://localhost:61613
+  auth:
+    username: guest
+    password: guest
+env:
+  sources:
+    - kind: deviceManager
+      module: dodal.beamlines.p51
+      mock: true
+    - kind: planFunctions
+      module: dodal.plans
+    - kind: planFunctions
+      module: dodal.plan_stubs
+    - kind: planFunctions
+      module: spectroscopy_bluesky.p51.plans
+    - kind: planFunctions
+      module: spectroscopy_bluesky.common.plans
+    - kind: planFunctions
+      module: dodal.beamlines.p51

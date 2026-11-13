@@ -1,0 +1,10 @@
+services:
+  rabbitmq:
+    image: docker.io/rabbitmq:4.0-management
+    ports:
+      - "1883:1883"
+      - "5672:5672"
+      - "15672:15672"
+      - "61613:61613"
+    volumes:
+      - ./services/rabbitmq_plugins:/etc/rabbitmq/enabled_plugins:ro,Z
