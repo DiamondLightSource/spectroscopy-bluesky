@@ -1,4 +1,5 @@
 FROM python:3.11-slim
+ARG VERSION=0.0.1
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
     graphviz \
@@ -11,7 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/spectroscopy_bluesky/ ./src/spectroscopy_bluesky/
 
+RUN printf '__version__ = "%s"\n' "$VERSION" \
+    > ./src/spectroscopy_bluesky/_version.py
+
 ENV PYTHONPATH=/app/src
 
-RUN python -c "import daq_queuing_service; print(daq_queuing_service.__file__)"
-CMD ["python","-m","daq_queuing_service","--config","./src/spectroscopy_bluesky/common/queue_service/p51/test_daq_queue_config.yaml","-p","8001","--dev"]
+CMD ["python","-m","daq_queuing_service","--config","./src/spectroscopy_bluesky/common/queue_service/test/test_daq_queue_config.yaml","-p","8001","--dev"]

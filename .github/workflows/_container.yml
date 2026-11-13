@@ -148,3 +148,46 @@ jobs:
           labels: ${{ steps.meta-processing.outputs.labels }}
           # Set the annotations to make the description appear in the GH repo page
           annotations: ${{ steps.meta-processing.outputs.annotations }}
+
+      ###############################
+      # BlueAPI Queue Container Image Build
+      ###############################
+
+      - name: Build and export Dockerfile.queue to local cache
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: true
+        with:
+          context: .
+          file: ./src/spectroscopy_bluesky/common/queue_service/Dockerfile.queue
+          load: true
+
+      - name: Create tags for publishing queue image
+        id: meta-queue
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}-queue
+          labels: |
+            org.opencontainers.image.title=spectroscopy-bluesky-queue
+            org.opencontainers.image.description=Queue for P51 beamline
+          annotations: |
+            org.opencontainers.image.title=spectroscopy-bluesky-queue
+            org.opencontainers.image.description=Queue for P51 beamline
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - name: Push cached queue image to container registry
+        if: github.ref_type == 'tag'
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: ./src/spectroscopy_bluesky/common/queue_service/Dockerfile.queue
+          push: true
+          tags: ${{ steps.meta-queue.outputs.tags }}
+          labels: ${{ steps.meta-queue.outputs.labels }}
+          # Set the annotations to make the description appear in the GH repo page
+          annotations: ${{ steps.meta-queue.outputs.annotations }}
