@@ -7,7 +7,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY src/spectroscopy_bluesky/common/queue_service/requirements.txt .
+COPY src/spectroscopy_bluesky/common/queue_service/test/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/spectroscopy_bluesky/ ./src/spectroscopy_bluesky/

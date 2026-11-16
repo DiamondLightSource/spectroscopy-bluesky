@@ -109,7 +109,6 @@ class TriggerLogic(DetectorTriggerLogic):
         self.processing_runner = processing_runner
 
     async def prepare_internal(self, num: int, livetime: float, deadtime: float):
-        # await self.processing_runner.start_processing(num)
         pass
 
     async def default_trigger_info(self):
@@ -122,14 +121,11 @@ class AcquireLogic(DetectorAcquireLogic):
 
     async def start_acquiring(self):
         pass
-        # LOGGER.info("AcquireLogic : start_acquiring called")
-        # await self.client_helper.start_processing()
 
     async def wait_for_idle(self):
-        pass  # does this method need to do anything (it doesn't in PandaAcquireLogic)
+        pass
 
     async def ensure_stopped(self):
-        LOGGER.info("AcquireLogic : ensure_stopped called")
         await self.processing_runner.stop_processing()
 
 
@@ -141,11 +137,14 @@ class DataLogic(DetectorDataLogic):
     ):
         self.processing_runner = processing_runner
         self.path_provider = path_provider
+        self.logger = logging.getLogger(type(self).__name__)
 
-    # datakey_name is name of the device?
+    # datakey_name is name of the device
     async def prepare_unbounded(self, datakey_name: str) -> StreamableDataProvider:
 
-        LOGGER.info(f"prepare_unbounded called. datakey_name = {datakey_name}")
+        self.logger.info(
+            f"Setting up input and output paths. datakey_name = {datakey_name}"
+        )
 
         # replace input and output paths using path provider
         if self.path_provider is not None:
@@ -163,11 +162,11 @@ class DataLogic(DetectorDataLogic):
                 )
                 self.processing_runner.config.input_files = [input_path]
 
-        LOGGER.info(
-            f"Hdf input file paths : {self.processing_runner.config.input_files}"
+        self.logger.info(
+            f"Source inputs   : {self.processing_runner.config.input_files}"
         )
-        LOGGER.info(
-            f"Hdf output file path : {self.processing_runner.config.output_file}"
+        self.logger.info(
+            f"Hdf output file : {self.processing_runner.config.output_file}"
         )
 
         await self.processing_runner.start_processing()
@@ -179,7 +178,7 @@ class DataLogic(DetectorDataLogic):
         ]
         write_path = self.processing_runner.config.output_file
 
-        # mare stream resource objects
+        # make a stream StreamResourceInfo for each processing output
         resources = [
             StreamResourceInfo(
                 data_key=dataset_name,
@@ -192,7 +191,7 @@ class DataLogic(DetectorDataLogic):
             for dataset_name in output_paths
         ]
 
-        LOGGER.info(f"Stream resource info : {resources}")
+        self.logger.info(f"Stream resource info : {resources}")
 
         return StreamResourceDataProvider(
             uri=write_path,
@@ -231,7 +230,7 @@ def create_test_processing():
     #     return path_info.directory_path / f"{path_info.filename}.h5"
 
     # Set the names of the input hdf file :
-    # source_path = str(generate_hdf_path("panda1"))
+    # source_path = str(generate_hdf_path("panda1"))  # input path uses 'panda1'
     # data_name = "inenc-1-val_dataset"
 
     # URL of socket
