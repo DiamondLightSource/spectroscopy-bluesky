@@ -1,12 +1,11 @@
 [build-system]
-requires = ["setuptools>=64", "setuptools_scm[toml]>=8"]
+requires = ["setuptools>=77.0.3", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectroscopy-bluesky"
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -30,19 +29,19 @@ dependencies = [
 ]
 
 dynamic = ["version"]
-license.file = "LICENSE"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.11"
 
 [dependency-groups]
 dev = [
-    "copier",
     "pre-commit",
     "pyright",
     "pytest",
     "pytest-cov",
     "ruff",
-    "tox-uv",
+    "tox-uv-bare",
     "types-mock",
     "types-requests",
     "uvicorn[standard]",
@@ -64,6 +63,10 @@ GitHub = "https://github.com/DiamondLightSource/spectroscopy-bluesky"
 email = "iain.hall@diamond.ac.uk"
 name = "Iain Hall"
 
+
+[tool.uv]
+# Minimum uv to fix eMudhra CA cert incident (see discuss.python.org/t/109576)
+required-version = ">=0.13.5"
 
 [tool.setuptools_scm]
 version_file = "src/spectroscopy_bluesky/_version.py"
@@ -98,6 +101,11 @@ env_list = ["pre-commit", "type-checking", "tests"]
 [tool.tox.env_run_base]
 # Pass all environment variables to the test environments
 passenv = ["*"]
+allowlist_externals = [
+    "pyright",
+    "pytest",
+    "pre-commit",
+]
 
 [tool.tox.env.pre-commit]
 description = "Run pre-commit on all files"
