@@ -8,14 +8,14 @@ from h5py import Dataset, File
 from numpy.typing import NDArray
 from pandablocks.connections import FrameData
 
-from spectroscopy_bluesky.common.processing_service import (
+from spectroscopy_bluesky.common.processing_service.backend import (
     Datasource,
     HdfDatasource,
     HdfDataWriter,
     Processor,
     ProcessorFunctionOutput,
 )
-from spectroscopy_bluesky.common.processing_service.data_sources import (
+from spectroscopy_bluesky.common.processing_service.backend.data_sources import (
     DataNotAvailableError,
     FrameDataCollection,
 )
