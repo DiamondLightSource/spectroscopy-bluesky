@@ -1,5 +1,6 @@
 import re
 from http import HTTPStatus
+from time import sleep
 from unittest.mock import MagicMock
 
 import pytest
@@ -26,6 +27,7 @@ def processor_setup():
                 output_path="new_data", function_name="value", data_names=["orig_data"]
             )
         ],
+        source_timeout=0.0,
     )
 
 
@@ -54,11 +56,18 @@ def test_bad_task_id():
     assert re.match("Task.*was not found", response.json()["detail"])
 
 
-def test_start_processor(processor_setup: ProcessorSetup):
+def test_file_not_found(processor_setup: ProcessorSetup):
+    # processing should start ok
     response = client.put("/start_processor", json=processor_setup.model_dump())
-    print(response.text)
-    assert response.status_code == HTTPStatus.NOT_FOUND
-    assert re.match("Input file.*could not be accessed", response.json()["detail"])
+    assert response.status_code == HTTPStatus.OK
+    sleep(1)
+
+    # processing should be in error state due to missing hdf file
+    resp = client.get(f"/task_status/{response.json()}")
+    resp_json = resp.json()
+    print(resp.status_code, resp_json)
+    assert resp_json["state"] == "FINISHED_ERROR"
+    assert "FileNotFoundError: Timeout" in resp_json["error_message"]
 
 
 def test_processor_args(mocker: MockerFixture, processor_setup: ProcessorSetup):
@@ -69,7 +78,7 @@ def validate_processor_args(mocker: MockerFixture, setup: ProcessorSetup):
 
     mock_path = api.__name__  # path tp api module
 
-    mocker.patch(f"{mock_path}.check_file_exists")
+    # mocker.patch(f"{mock_path}.check_file_exists")
     mock_processor: MagicMock = mocker.patch(f"{mock_path}.Processor", autospec=True)
 
     mock_hdf = MagicMock()
