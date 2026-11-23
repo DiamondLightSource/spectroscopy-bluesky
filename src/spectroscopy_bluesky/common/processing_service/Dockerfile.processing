@@ -7,6 +7,7 @@
 #   podman exec -it <container id> -it /bin/bash
 
 FROM python:3.11-slim
+ARG VERSION=0.0.1
 
 # install procps and hdf5-tools
 RUN apt-get update \
@@ -22,6 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # make copy of code from git repo (spectroscopy_bluesky) 
 COPY src/spectroscopy_bluesky/ ./src/spectroscopy_bluesky/
+RUN printf '__version__ = "%s"\n' "$VERSION" \
+    > ./src/spectroscopy_bluesky/_version.py
 
 # Set python path so it can locate modules in the source code tree
 ENV PYTHONPATH=/app/src
